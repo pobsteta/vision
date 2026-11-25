@@ -50,10 +50,10 @@ _Modèle de carte :_
 
 ## Planifié
 
-- [053-couches-onf-wfs](missions/053-couches-onf-wfs.md) · depuis le cycle 6 · **validée par Pascal le 25 novembre 2026** ; étape 1 (mesure) confiée au dev
-  - Homme : `dev` (étape 1 mesure, étape 2 projet modèle), puis `relecteur`
-  - Mission : forêts, parcelles et points de rencontre des secours ONF (WFS + copie locale) dans vision.qgz, aux styles de Pascal
-  - Moyens : GetCapabilities et .qml dans `docs/referentiels/brut/onf/`, GitHub Actions pour joindre le service (http)
+- [053-couches-onf-wfs](missions/053-couches-onf-wfs.md) · depuis le cycle 6 · **en cours, étape 2** (point du 25 novembre 2026, sources : fiche 053 ; `pilotage/journal.md` du 25 novembre ; ADR 0010 acceptée) : étape 1 (mesure n° 1) et étapes 1 bis et 1 ter (sonde puis cache de zone, plugin 0.7.0) faites, cache essayé par Pascal sur le Samsung en ligne et hors ligne ; étape 2 : groupe « ONF » (trois couches WFS 1.0.0) dans `vision.qgz` fait par le dev, spec § 3.6 et README écrits par l'archiviste ; **reste** : relecture (`relecteur`), essai du groupe WFS dans QField 4.3.8 par Pascal, PR vers `main` (porte n° 3). Colonne : aucune colonne « En cours » dans ce tableau, la carte reste en « Planifié » (voir la question de l'archiviste au journal)
+  - Homme : `dev` (étapes 1 à 2), `archiviste` (spec, README, référentiels), puis `relecteur`
+  - Mission : forêts publiques, parcelles forestières et points de rencontre des secours de l'ONF dans `vision.qgz` : WFS en ligne (groupe « ONF ») et cache de zone sur le mobile pour le hors ligne (ADR 0010 ; la copie nationale du premier choix est abandonnée), aux styles de Pascal adaptés aux champs réels
+  - Moyens : GetCapabilities, .qml et mesure dans `docs/referentiels/brut/onf/`, GitHub Actions pour joindre le service (http), Samsung de Pascal pour les essais
 
 ## Terminé
 

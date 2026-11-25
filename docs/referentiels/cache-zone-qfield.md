@@ -539,6 +539,8 @@ place depuis l'aller-retour 1/3.
 
 ## 13. À écrire à l'étape 2 (spec § 3.3 ou nouveau § 3.6, README), non fait ici
 
+> **Fait le 25 novembre 2026 (archiviste, mission 053 étape 2)** : spec § 1 (note), § 3.3 (entrée « cache », dossier et nom réservés), § 3.6, § 11 n° 9 à 11 ; README § 3 « Les couches de l'ONF », « Services externes ». Les textes validés ne sont pas recopiés : la fiche 053 est leur source. La liste ci-dessous est gardée telle qu'écrite.
+
 - Spec : le cache de zone (bouton, plafonds, contrôles, tout ou rien, `vision-imports/_cache-onf/<horodatage>/`, entrées du
   registre `cache: "onf"`, rechargement, noms des couches, textes validés et ceux qui restent à valider) ; le refus d'un zip
   nommé `_cache-onf.zip` ; l'attribution (§ 12).
@@ -555,6 +557,11 @@ place depuis l'aller-retour 1/3.
   non le fournisseur. À essayer par Pascal : projet ouvert avec réseau, forêts visibles, zoom en deçà du 1:50 000 pour parcelles et
   points, GetCapabilities et DescribeFeatureType de la couche lus par le fournisseur en `version='1.0.0'` ;
 - les **flèches SVG** du style des points (`arrows/Arrow_01.svg`) dans QField Android ;
-- le **poids d'une requête** des forêts « toujours visibles » à petite échelle (177 Mo pour toute la métropole, mesure n° 1) : rien ne plafonne
-  la requête hors de `restrictToRequestBBOX` ; la clé `maxNumFeatures` existe (§ 1.2) et n'est pas posée (arbitrage de Pascal requis) ;
+- ~~le **poids d'une requête** des forêts « toujours visibles » à petite échelle (177 Mo pour toute la métropole, mesure n° 1) : rien ne plafonne
+  la requête hors de `restrictToRequestBBOX` ; la clé `maxNumFeatures` existe (§ 1.2) et n'est pas posée (arbitrage de Pascal requis) ;~~
+  **Corrigé le 25 novembre 2026 (archiviste, sur décision de Pascal du même jour, journal et ADR 0010)** : pour les couches **WFS** de
+  `vision.qgz`, les forêts ne sont plus « toujours visibles » : **seuil 1:250 000** (visibles en deçà seulement), posé par le projet
+  (`COUCHES_ONF`, `minScale: 250000`, `outils/projet-modele.mjs`) ; parcelles et points restent en deçà du 1:50 000. Ce qui reste vrai :
+  **rien d'autre ne plafonne la requête** (`maxNumFeatures` non posée) ; à 1:250 000, une requête de forêts couvre encore une grande zone, **non
+  mesurée**. Pour les couches du **cache**, les forêts restent toujours visibles (zone de 20 km au plus, 5 000 objets) ;
 - en mode avion, ces trois couches n'affichent rien (en ligne seulement) ; le cache de zone prend le relais.
