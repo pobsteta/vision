@@ -34,8 +34,11 @@ style à côté), et qui revient à chaque réouverture.
 
 1. **En ligne** : groupe « ONF » dans `vision.qgz`, entre « Saisie terrain » et les fonds, trois couches WFS en
    lecture seule, nommées comme celles du cache (« Forêts publiques (© ONF) », « Parcelles forestières (© ONF) »,
-   « Points de secours (© ONF) » : « en ligne » écarté par Pascal, trop long), requêtes limitées à l'emprise visible ; forêts toujours visibles, parcelles et points en deçà du
-   1:50 000 ; hors du thème « Fond embarqué ».
+   « Points de secours (© ONF) » : « en ligne » écarté par Pascal, trop long), requêtes limitées à l'emprise visible, WFS **1.0.0 fixée** (`version='1.0.0'` : version prouvée sur le Samsung ;
+   sans clé, QGIS négocie, forme jamais mesurée) ; ordre points, parcelles, forêts (points au-dessus des polygones) ;
+   forêts en deçà du 1:250 000 (sans seuil, la carte dézoomée demanderait les 177 Mo de forêts de métropole :
+   Pascal, 25 novembre 2026), parcelles et points en deçà du 1:50 000 ; hors du thème « Fond embarqué ». Les couches
+   du cache gardent leurs seuils (forêts toujours visibles : une zone de 20 km au plus).
 2. **Sans réseau** : bouton « Mettre en cache les couches ONF de cette zone » ; emprise visible (quatre coins si la
    carte est tournée) de 20 km de côté au plus, 5 000 objets par couche au plus ; requêtes `GetFeature` WFS 1.0.0 +
    `BBOX` ; contrôle de complétude obligatoire ; système EPSG:2154 et type de géométrie imposés par un `.gfs` écrit
