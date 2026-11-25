@@ -67,9 +67,12 @@ test('lecture seule, attribution « © ONF » (rights et attribution)', () => {
   }
 });
 
-test('seuils : forêts toujours visibles ; parcelles et points visibles en deçà du 1:50 000', () => {
+test('seuils : forêts WFS visibles en deçà du 1:250 000 (Pascal, 25 novembre 2026), parcelles et points en deçà du 1:50 000 ; style du cache inchangé', () => {
   const t = (nom) => { const e = couche(nom).match(/<maplayer [^>]*>/)[0]; return [attr(e, 'hasScaleBasedVisibilityFlag'), attr(e, 'minScale'), attr(e, 'maxScale')]; };
-  assert.deepEqual(t(NOMS.FOR_PUBL_FR), ['0', '100000000', '0']);
+  assert.deepEqual(t(NOMS.FOR_PUBL_FR), ['1', '250000', '0']);
+  // le seuil vient du projet, non du style : le style adapté du plugin (cache) garde les forêts toujours visibles
+  assert.match(STYLES_ONF.FOR_PUBL_FR.match(/<qgis [^>]*>/)[0], /hasScaleBasedVisibilityFlag="0"/);
+  assert.match(STYLES_ONF.FOR_PUBL_FR.match(/<qgis [^>]*>/)[0], /minScale="100000000"/);
   assert.deepEqual(t(NOMS.PARC_PUBL_FR), ['1', '50000', '0']);
   assert.deepEqual(t(NOMS.PRS_FR), ['1', '50000', '0']);
 });

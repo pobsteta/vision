@@ -133,11 +133,12 @@ export const VERSION_WFS_ONF = '1.0.0';
 export const ATTRIBUTION_ONF = '© ONF';
 // Du dessus au dessous : les points au-dessus des parcelles, elles-mêmes au-dessus des forêts. Emprises : mesure n° 1 (EPSG:2154, ordre x puis y).
 // Mêmes noms que les couches du cache du plugin (Pascal, 25 novembre 2026) : le plugin ne retrouve ni ne retire une couche du cache par son nom, seulement par les marques vision/cache et vision/couche (Vision.qml coucheDuCache, retirerCacheDeLaCarte, coucheDuProjet). Seuil : parcelles et points en deçà du 1:50 000
-// (dans le style adapté), forêts toujours visibles ; toutes cochées (arbitrage n° 2).
+// (dans le style adapté) ; forêts WFS visibles en deçà du 1:250 000 (Pascal, 25 novembre 2026 : une carte dézoomée ne demande pas toute la métropole),
+// seuil posé ici sur la couche du projet, jamais dans le style, qui reste celui du cache (forêts toujours visibles) ; toutes cochées (arbitrage n° 2).
 export const COUCHES_ONF = [
   { couche: 'PRS_FR', nom: 'Points de secours (© ONF)', geometrie: 'Point', emprise: [140481.019, 6092810.07075, 1225571.643, 7083465], visible: true },
   { couche: 'PARC_PUBL_FR', nom: 'Parcelles forestières (© ONF)', geometrie: 'Polygon', emprise: [126014.2, 6137906.3, 1206122.9, 7085843.4], visible: true },
-  { couche: 'FOR_PUBL_FR', nom: 'Forêts publiques (© ONF)', geometrie: 'Polygon', emprise: [126014.2, 6061982.5, 1239155.4, 7085843.4], visible: true },
+  { couche: 'FOR_PUBL_FR', nom: 'Forêts publiques (© ONF)', geometrie: 'Polygon', emprise: [126014.2, 6061982.5, 1239155.4, 7085843.4], visible: true, minScale: 250000 },
 ];
 export const sourceOnf = (c) => `restrictToRequestBBOX='1' srsname='EPSG:2154' typename='${c.couche}' url='${SERVICE_ONF}' version='${VERSION_WFS_ONF}'`;
 const idOnf = (c) => idCouche({ nom: c.couche });
@@ -147,7 +148,8 @@ function maplayerOnf(c) {
   const m = /<qgis ([^>]*)>([\s\S]*)<\/qgis>\s*$/.exec(style);
   if (!m) throw new Error(`style ONF ${c.couche} : élément <qgis> introuvable`);
   // Attributs du style (échelles, étiquettes, simplification) repris tels quels sur la couche, sauf version (de QGIS) et readOnly (lecture seule).
-  const attrs = [...m[1].matchAll(/(\w+)="([^"]*)"/g)].filter((a) => a[1] !== 'version' && a[1] !== 'readOnly').map((a) => `${a[1]}="${a[2]}"`);
+  const surcharge = c.minScale ? { hasScaleBasedVisibilityFlag: '1', minScale: String(c.minScale) } : {}; // seuil du projet, plus fort que celui du style
+  const attrs = [...m[1].matchAll(/(\w+)="([^"]*)"/g)].filter((a) => a[1] !== 'version' && a[1] !== 'readOnly').map((a) => `${a[1]}="${surcharge[a[1]] ?? a[2]}"`);
   const [x0, y0, x1, y1] = c.emprise;
   return `    <maplayer ${attrs.join(' ')} geometry="${c.geometrie}" readOnly="1" type="vector">
       <extent><xmin>${x0}</xmin><ymin>${y0}</ymin><xmax>${x1}</xmax><ymax>${y1}</ymax></extent>
