@@ -50,6 +50,11 @@ _Modèle de carte :_
 
 ## Planifié
 
+- [053-couches-onf-wfs](missions/053-couches-onf-wfs.md) · depuis le cycle 6 · **validée par Pascal le 25 novembre 2026** ; étape 1 (mesure) confiée au dev
+  - Homme : `dev` (étape 1 mesure, étape 2 projet modèle), puis `relecteur`
+  - Mission : forêts, parcelles et points de rencontre des secours ONF (WFS + copie locale) dans vision.qgz, aux styles de Pascal
+  - Moyens : GetCapabilities et .qml dans `docs/referentiels/brut/onf/`, GitHub Actions pour joindre le service (http)
+
 ## Terminé
 
 - [052-styles-modeles](missions/052-styles-modeles.md) · depuis le bilan n° 1 · fusionnée (PR #57)
