@@ -169,6 +169,17 @@ Pascal avant d'être écrit.
 - **Ne doit pas :** toucher à la bibliothèque de styles (`plugin/styles/`) ; mettre une clé ; ajouter
   `DT_FR`, `ATE_FR` ou `RB_FR` (hors demande).
 
+### Étape 3 — groupe « ONF Cache » (ouverte le 25 novembre 2026, demande de Pascal)
+
+Pascal : « renommer le groupe ONF en ONF WFS et ajouter un groupe ONF Cache ». Le groupe « ONF » de `vision.qgz`
+devient **« ONF WFS »** ; un groupe **« ONF Cache »** reçoit les trois couches du cache, qui ne s'empilent plus en tête
+de liste (voie C4 de `docs/referentiels/cache-zone-qfield.md` : un plugin ne peut ni créer un groupe ni y ranger une
+couche ; le projet modèle porte donc le groupe et trois couches à chemin fixe que le plugin remplit). **Preuve
+avant code** dans les sources de QField 4.3.7 / QGIS : relecture d'une couche existante après remplacement de son
+fichier (API exposée à QML), remplacement d'un GeoPackage ouvert sur Android, tout ou rien avec des chemins fixes,
+GeoPackage vides livrés avec le projet, rechargement et registre, place du groupe (proposition : « ONF Cache » au-dessus
+de « ONF WFS »). Si une voie est prouvée : prototype, essai Samsung, puis documentation et ADR 0010 amendée.
+
 ## Terrain
 
 Sur le Samsung : avec réseau, les trois couches s'affichent aux styles fournis, Parcelles et Points
