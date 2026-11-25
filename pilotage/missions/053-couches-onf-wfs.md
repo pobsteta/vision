@@ -135,7 +135,7 @@ relu sans réseau. Le prototype est le **cache de zone dans le plugin**, publié
 | Pas de réseau | « Pas de réseau : le cache ONF n'est pas mis à jour, l'ancien est gardé. » |
 | Réponse incomplète | « Réponse incomplète du service ONF : le cache n'est pas mis à jour, l'ancien est gardé. » |
 | Dans le panneau | « Cache ONF du 25/11/2026 : 4 forêts, 53 parcelles, 1 point de rencontre. » |
-| Noms des couches | « Forêts publiques (ONF) », « Parcelles forestières (ONF) », « Points de rencontre des secours (ONF) » |
+| Noms des couches | « Forêts publiques (© ONF) », « Parcelles forestières (© ONF) », « Points de rencontre des secours (© ONF) » (remplacés le 25 novembre 2026, attribution dans le nom) |
 
 Attribution des trois couches : « © ONF » (validée par Pascal le 25 novembre 2026 ; accord de l'ONF rapporté par
 Pascal, trace écrite à verser).
