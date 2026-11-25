@@ -39,6 +39,16 @@
    limitées à l'emprise visible ; Forêts cochée ; Parcelles et Points de secours cochés mais visibles
    seulement en deçà du 1:50 000.
 
+## Arbitrages de Pascal après la mesure n° 1 (25 novembre 2026)
+
+3. **Étiquette des forêts** : `iidtn_frt` (identifiant ONF), à la place de `CCOD_FRT` absent du service.
+4. **Styles adaptés** aux champs réels du service (`ccod_prf` en minuscules pour les parcelles ; formulaire
+   des points de secours sur `iidtn_prs`, `llib_prs`, `llib_com`…), symboles, couleurs et seuils gardés :
+   copies adaptées générées depuis les `.qml` de Pascal, qui restent intacts dans `docs/referentiels/brut/onf/`.
+
+Mesure n° 1 : `docs/referentiels/brut/onf/mesure-2026-11-25.md` (service en WFS 1.0.0, 1.1.0 et 2.0.0 ;
+17 190 forêts, 408 400 parcelles, 24 343 points ; licence non lue).
+
 ## Mission
 
 **En une phrase :** Ajouter à `vision.qgz` un groupe « ONF » donnant les forêts publiques, les parcelles
