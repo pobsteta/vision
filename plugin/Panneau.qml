@@ -14,9 +14,11 @@ Item {
   property var vision: null      // objet de Vision.qml
   property var hote: null      // main.qml (dernierMessage)
   property var couches: []
+  property string ligneCache: ""
 
   function relire() {
     couches = vision ? vision.couchesInscrites() : [];
+    ligneCache = vision ? vision.cacheLigne() : "";
   }
 
   Component.onCompleted: relire()
@@ -46,6 +48,25 @@ Item {
         font.pointSize: 18
         text: "Ajouter un zip"
         onClicked: panneau.vision.ajouterZip()
+      }
+
+      // Mission 053, étape 1 ter : cache de zone des couches ONF (textes validés par Pascal, Logique.TEXTES_CACHE_ONF).
+      Button {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 72
+        font.pointSize: 18
+        enabled: panneau.vision && !panneau.vision.cacheEnCours
+        text: panneau.vision ? (panneau.vision.cacheEnCours ? panneau.vision.textePendantCache : panneau.vision.texteBoutonCache) : ""
+        onClicked: panneau.vision.mettreEnCacheOnf()
+      }
+
+      Label {
+        Layout.fillWidth: true
+        visible: panneau.ligneCache !== ""
+        wrapMode: Text.WordWrap
+        color: "black"
+        font.pointSize: 16
+        text: panneau.ligneCache
       }
 
       Rectangle {
@@ -103,53 +124,6 @@ Item {
             onClicked: panneau.vision.retirer(modelData.zip, modelData.couche)
           }
         }
-      }
-
-      // Mission 053, étape 1 bis : sonde ONF, outil d'essai (textes provisoires, à retirer avant toute version stable).
-      Label {
-        Layout.fillWidth: true
-        Layout.topMargin: 24
-        wrapMode: Text.WordWrap
-        color: "black"
-        font.pointSize: 16
-        font.bold: true
-        text: "Sonde ONF : outil d'essai (mission 053), textes provisoires. N'ajoute rien à la carte ni au registre ; écrit dans vision-imports/_sonde-053/."
-      }
-
-      Button {
-        Layout.fillWidth: true
-        Layout.preferredHeight: 72
-        font.pointSize: 16
-        enabled: panneau.vision && !panneau.vision.sondeEnCours
-        text: "Sonde ONF : massif de la Serre (réseau)"
-        onClicked: panneau.vision.sonderReseau("serre")
-      }
-
-      Button {
-        Layout.fillWidth: true
-        Layout.preferredHeight: 72
-        font.pointSize: 16
-        enabled: panneau.vision && !panneau.vision.sondeEnCours
-        text: "Sonde ONF : emprise de la carte (réseau)"
-        onClicked: panneau.vision.sonderReseau("carte")
-      }
-
-      Button {
-        Layout.fillWidth: true
-        Layout.preferredHeight: 72
-        font.pointSize: 16
-        enabled: panneau.vision && !panneau.vision.sondeEnCours
-        text: "Sonde ONF : hors réseau (fichiers reçus)"
-        onClicked: panneau.vision.sonderHorsReseau()
-      }
-
-      Label {
-        Layout.fillWidth: true
-        visible: panneau.vision && panneau.vision.sondeTexte !== ""
-        wrapMode: Text.WrapAnywhere
-        color: "black"
-        font.pointSize: 12
-        text: (panneau.vision && panneau.vision.sondeEnCours ? "Sonde en cours…\n" : "") + (panneau.vision ? panneau.vision.sondeTexte : "")
       }
 
       Label {

@@ -9,6 +9,7 @@ import "vision-logique.mjs" as Logique
 import "vision-controles.mjs" as Controles
 import "vision-styles.mjs" as Styles
 import "vision-bibliotheque.mjs" as Bibliotheque
+import "vision-styles-onf.mjs" as StylesOnf
 
 Item {
   id: vision
@@ -189,8 +190,10 @@ Item {
   // QField v4.3.7 (qflayerutils.cpp l. 618 et 624) la rend en CppOwnership : sans deleteLater, personne ne la détruit.
   // La logique ne l'appelle jamais sur une couche ajoutée au projet, ni deux fois sur la même.
   // Mission 049 : vrai si la couche porte la marque Vision, donc appartient au projet (ajoutée par le chargeur) : jamais libérée.
+  // Mission 053 : une couche du cache ONF (marque vision/cache) appartient aussi au projet (forme R2 corrigée, point 2).
   function coucheDuProjet(couche) {
-    return !!couche && typeof couche.customProperty === "function" && String(couche.customProperty("vision/zip", "")) !== "";
+    if (!couche || typeof couche.customProperty !== "function") return false;
+    return String(couche.customProperty("vision/zip", "")) !== "" || String(couche.customProperty("vision/cache", "")) !== "";
   }
 
   function libererCouche(couche) {
@@ -339,7 +342,8 @@ Item {
       fondDejaPresent: fondDejaPresent,
       libererCouche: libererCouche,
       coucheDuProjet: coucheDuProjet,
-      chargerCouche: id ? chargeur() : function () { return null; }
+      chargerCouche: id ? chargeur() : function () { return null; },
+      chargerCache: id ? chargerCache : function () { return null; }
     });
     registreChange();
     return r;
@@ -466,318 +470,182 @@ Item {
     registreChange();
   }
 
-  // Couches du registre, pour le panneau.
+  // Couches des zips du registre, pour le panneau (le cache ONF a sa propre ligne : cacheLigne).
   function couchesInscrites() {
     const id = visionId();
-    return id ? Logique.lireRegistre(reglages, id) : [];
+    return id ? Logique.entreesDesZips(Logique.lireRegistre(reglages, id)) : [];
   }
 
-  // ==== sonde 053 : début (outil d'essai, mission 053, étape 1 bis, temps 2 ; docs/referentiels/cache-zone-qfield.md § 8)
-  // À RETIRER AVANT TOUTE FUSION VERS MAIN (tests/sonde-onf-053.test.mjs, « garde » : la sonde ne vit qu'avec VERSION 0.6.0).
-  // Mesure sur l'appareil, sans toucher au registre, sans rien ajouter à la carte ni rien effacer : écrit
-  // seulement dans vision-imports/_sonde-053/ (fichier d'essai, GML reçus, GeoPackage d'essai, rapport-<horodatage>.txt).
-  // Appels lus dans QField v4.3.7 : iface.createHttpRequest (qfappinterface.h l. 230 ; qfxmlhttprequest.h l. 62-212),
-  // iface.mapCanvas().mapSettings.visibleExtent et destinationCrs (qfappinterface.h l. 214 ; qgsquickmapsettings.h
-  // l. 72, l. 109), LayerUtils.loadVectorLayer avec fournisseur (qflayerutils.h l. 200), saveVectorLayerAs avec filtre
-  // (l. 254). Textes provisoires : la sonde est un outil d'essai.
-  property string sondeTexte: ""
-  property bool sondeEnCours: false
-  property var sondeLignes: []
+  // ==== cache ONF (mission 053, étape 1 ter ; docs/referentiels/cache-zone-qfield.md, voie B prouvée par la sonde)
+  // Avec réseau : GetFeature WFS 1.0.0 + BBOX des trois couches ONF sur l'emprise visible, l'une après l'autre, par
+  // iface.createHttpRequest (QField v4.3.7 qfappinterface.h l. 230 ; qfxmlhttprequest.h l. 62-212) ; puis
+  // Logique.cacheEnregistrer (GML écrit, .gfs de Vision, GeoPackage, style, contrôles, remplacement tout ou rien).
+  // Sans réseau : le cache revient à la réouverture (Logique.demarrerProjet, chargerCache).
+  // Libération des couches de travail : impossible en QML (Qt 6.10.3 cache deleteLater ; destroy() refuse une couche en
+  // CppOwnership : cache-zone-qfield.md § 10) ; elles ne sont pas libérées, voir Logique.cacheEnregistrer.
+  property bool cacheEnCours: false
+  readonly property string texteBoutonCache: Logique.TEXTES_CACHE_ONF.bouton
+  readonly property string textePendantCache: Logique.TEXTES_CACHE_ONF.pendant
 
-  property bool sondeLibererSignale: false
-
-  // Libération sûre d'une couche ouverte par la sonde (CppOwnership, qflayerutils.cpp l. 618). Essai du 25 novembre 2026
-  // (QField 4.3.8) : deleteLater n'est pas une fonction en QML, Qt le cache (qtdeclarative 6.10.3,
-  // src/qml/qml/qqmlpropertycache.cpp l. 431-450). Ne lève jamais ; dit une fois par sonde que la libération est impossible.
-  function sondeLiberer(c) {
-    if (!c) return;
-    try {
-      if (typeof c.deleteLater === "function") c.deleteLater();
-      else if (!sondeLibererSignale) {
-        sondeLibererSignale = true;
-        sondeNoter("  libération impossible (deleteLater absent) : les couches ouvertes par la sonde restent en mémoire jusqu'à la fermeture de QField");
-      }
-    } catch (e) { /* sans effet sur la sonde */ }
-  }
-
-  function sondeNoter(ligne) {
-    sondeLignes.push(String(ligne));
-    sondeTexte = sondeLignes.join("\n");
-  }
-
-  function sondeDebut(titre) {
-    sondeLignes = [];
-    sondeTexte = "";
-    sondeLibererSignale = false;
-    sondeNoter("Sonde ONF (" + Logique.SONDE_ONF.version + ", outil d'essai) : " + titre);
-    sondeNoter("Date : " + new Date().toISOString() + " ; Vision " + versionPlugin + " ; QField " + (versionQField() || "version inconnue"));
-  }
-
-  function sondeFin(dossier) {
-    sondeNoter("Fin de la sonde.");
-    let ecrit = false;
-    const rapport = dossier + "/" + Logique.sondeNomRapport(new Date());
-    sondeNoter("Compte rendu : " + rapport);
-    try { ecrit = ecrireFichier(rapport, sondeTexte + "\n"); } catch (e) { ecrit = false; }
-    if (!ecrit) sondeNoter("Compte rendu NON écrit dans " + rapport);
-    sondeEnCours = false;
-    message("Sonde ONF terminée (voir le panneau).");
-  }
-
-  // Emprise visible de la carte, en EPSG:2154 ; reprojetée par ses quatre coins si la carte est dans un autre système.
-  function sondeEmpriseCarte() {
-    const ms = iface.mapCanvas().mapSettings;
-    const r = ms.visibleExtent;
-    const authid = String(ms.destinationCrs.authid || "");
-    let e = { xmin: Number(r.xMinimum), ymin: Number(r.yMinimum), xmax: Number(r.xMaximum), ymax: Number(r.yMaximum) };
-    sondeNoter("Carte : système " + (authid || "inconnu") + ", rotation " + Number(ms.rotation) + "°, emprise visible "
-      + [e.xmin, e.ymin, e.xmax, e.ymax].map(function (v) { return Math.round(v); }).join(", "));
-    if (Number(ms.rotation) !== 0) sondeNoter("Carte tournée : l'emprise lue peut ne pas couvrir tout l'écran.");
-    if (authid !== "EPSG:2154") {
-      const but = CoordinateReferenceSystemUtils.fromDescription("EPSG:2154");
-      const coins = [[e.xmin, e.ymin], [e.xmax, e.ymin], [e.xmax, e.ymax], [e.xmin, e.ymax]].map(function (c) {
-        const p = GeometryUtils.reprojectPoint(GeometryUtils.point(c[0], c[1]), ms.destinationCrs, but);
-        return { x: Number(p.x), y: Number(p.y) };
-      });
-      e = Logique.sondeEmpriseDesPoints(coins);
+  // Couche du cache ONF déjà sur la carte (marques vision/cache=onf et vision/couche), ou null.
+  function coucheDuCache(nomCouche) {
+    if (!qgisProject) return null;
+    const couches = ProjectUtils.mapLayers(qgisProject);
+    for (const id in couches) {
+      const l = couches[id];
+      if (!l || typeof l.customProperty !== "function") continue;
+      if (String(l.customProperty("vision/cache", "")) === "onf" && String(l.customProperty("vision/couche", "")) === nomCouche) return l;
     }
-    return e;
+    return null;
   }
 
-  function sondeGeometrie(c) {
-    try { return Logique.sondeTypeGeometrie(c.geometryType(), c.wkbType()); } catch (e) { return "illisible"; }
+  // Marque la couche du cache et l'ajoute à la carte : ProjectUtils.addMapLayer la met en tête de liste (arbitrage n° 6).
+  function ajouterCache(couche, nomCouche) {
+    couche.setCustomProperty("vision/cache", "onf");
+    couche.setCustomProperty("vision/couche", nomCouche);
+    ProjectUtils.addMapLayer(qgisProject, couche);
   }
 
-  // Ouvre un GML (pilote OGR GML de GDAL), le décrit, le réécrit en GeoPackage d'essai puis relit ce GeoPackage.
-  // Rend true si le GML s'est ouvert. `attendu` : valeurs attendues (fichier d'essai) ou null.
-  function sondeOuvrirGml(dossier, chemin, nom, champLibelle, attendu) {
-    let c = null;
-    try { c = LayerUtils.loadVectorLayer(chemin, nom); } catch (e) { c = null; }
-    if (!c || !c.isValid) {
-      sondeNoter("  " + nom + " : ouverture du GML ÉCHOUÉE (pilote GML absent, ou fichier illisible)");
-      sondeLiberer(c);
-      return false;
-    }
-    let champs = [];
-    try { champs = c.fields.names; } catch (e) { champs = []; }
-    let authid = "";
-    try { authid = String(c.crs.authid || ""); } catch (e) { authid = ""; }
-    let n = 0;
-    const valeurs = [];
-    try {
-      const it = LayerUtils.createFeatureIterator(c);
-      while (it.hasNext()) {
-        const f = it.next();
-        if (n < 3) valeurs.push(String(f.attribute(champLibelle)));
-        n++;
-      }
-      it.close();
-    } catch (e) {
-      sondeNoter("  " + nom + " : lecture des objets interrompue (" + e + ")");
-    }
-    sondeNoter("  " + nom + " : GML ouvert, valide, " + n + " objets, système " + (authid || "inconnu") + ", type de géométrie " + sondeGeometrie(c) + ", champs : " + champs.join(", "));
-    sondeNoter("  " + nom + " : " + champLibelle + " lus : " + valeurs.join(" | "));
-    if (attendu) {
-      let justes = 0;
-      for (let i = 0; i < attendu.length; i++) if (valeurs[i] === attendu[i].llib_frt) justes++;
-      sondeNoter("  " + nom + " : " + (justes === attendu.length && n === attendu.length ? "accents JUSTES" : "accents FAUX") + " (" + justes + "/" + attendu.length + ")");
-    }
-    // GeoPackage d'essai, nom horodaté (aucun fichier encore ouvert n'est écrasé) ; table = nom du fichier (qflayerutils.cpp l. 705).
-    const base = nom + "-" + Date.now();
-    const ecrit = String(LayerUtils.saveVectorLayerAs(c, dossier + "/" + base + ".gpkg", "GPKG") || "");
-    sondeLiberer(c);
-    if (ecrit === "") {
-      sondeNoter("  " + nom + " : réécriture en GeoPackage REFUSÉE (raison dans le journal de QField)");
-      return true;
-    }
-    let g = null;
-    let m = -1;
-    let typeRelu = "illisible";
-    try {
-      g = LayerUtils.loadVectorLayer(ecrit + "|layername=" + base, base);
-      if (g && g.isValid) {
-        m = 0;
-        typeRelu = sondeGeometrie(g);
-        const it2 = LayerUtils.createFeatureIterator(g);
-        while (it2.hasNext()) { it2.next(); m++; }
-        it2.close();
-      }
-    } catch (e) { m = -1; }
-    sondeLiberer(g);
-    sondeNoter("  " + nom + " : GeoPackage " + ecrit + " : " + (m < 0 ? "illisible" : m + " objets relus, type de géométrie " + typeRelu) + (m >= 0 && m !== n ? " (ÉCART avec le GML)" : ""));
-    return true;
+  // Réouverture du projet : chargerCache(source, nom affiché, couche du service) ; rend la couche (valide ou non).
+  function chargerCache(source, nom, nomCouche) {
+    const deja = coucheDuCache(nomCouche);
+    if (deja) return deja.isValid ? deja : null;
+    const couche = LayerUtils.loadVectorLayer(source, nom);
+    if (couche && couche.isValid) ajouterCache(couche, nomCouche);
+    return couche;
   }
 
-  // Voie A : couche WFS de QGIS, réécrite par saveVectorLayerAs avec un filtre d'emprise. L'écran se fige pendant le téléchargement.
-  function sondeVoieA(dossier, couche, emprise) {
-    sondeNoter("  " + couche + " : voie A (couche WFS de QGIS ; écran figé pendant le téléchargement)");
-    const t0 = Date.now();
-    let l = null;
-    try { l = LayerUtils.loadVectorLayer(Logique.sondeUriWfs(couche), couche, "WFS"); } catch (e) { l = null; }
-    if (!l || !l.isValid) {
-      sondeNoter("  " + couche + " : voie A, couche WFS invalide (" + (Date.now() - t0) + " ms)");
-      sondeLiberer(l);
-      return;
+  // Retire de la carte toutes les couches du cache ONF (ProjectUtils.removeMapLayer : le projet les détruit).
+  function retirerCacheDeLaCarte() {
+    if (!qgisProject) return;
+    const couches = ProjectUtils.mapLayers(qgisProject);
+    const ids = [];
+    for (const id in couches) {
+      const l = couches[id];
+      if (l && typeof l.customProperty === "function" && String(l.customProperty("vision/cache", "")) === "onf") ids.push(String(l.id));
     }
-    sondeNoter("  " + couche + " : voie A, couche WFS valide, type de géométrie " + sondeGeometrie(l));
-    const base = couche + "-voieA-" + Date.now();
-    const ecrit = String(LayerUtils.saveVectorLayerAs(l, dossier + "/" + base + ".gpkg", "GPKG", Logique.sondeExpressionEmprise(emprise)) || "");
-    sondeLiberer(l);
-    let m = -1;
-    let typeA = "illisible";
-    if (ecrit !== "") {
-      let g = null;
-      try {
-        g = LayerUtils.loadVectorLayer(ecrit + "|layername=" + base, base);
-        if (g && g.isValid) {
-          m = 0;
-          typeA = sondeGeometrie(g);
-          const it = LayerUtils.createFeatureIterator(g);
-          while (it.hasNext()) { it.next(); m++; }
-          it.close();
-        }
-      } catch (e) { m = -1; }
-      sondeLiberer(g);
-    }
-    sondeNoter("  " + couche + " : voie A, " + (ecrit === "" ? "écriture REFUSÉE" : ecrit + " : " + (m < 0 ? "illisible" : m + " objets, type de géométrie " + typeA)) + ", " + ((Date.now() - t0) / 1000).toFixed(1) + " s");
+    for (let i = 0; i < ids.length; i++) ProjectUtils.removeMapLayer(qgisProject, ids[i]);
   }
 
-  function sondeFichierEssai(dossier) {
-    const chemin = dossier + "/fixture.gml";
-    let ok = false;
-    try { ok = ecrireFichier(chemin, Logique.sondeFixtureGml()); } catch (e) { ok = false; }
-    sondeNoter("Fichier d'essai (2 forêts fictives, accents) : " + (ok ? "écrit" : "NON écrit") + " dans " + chemin);
-    if (ok) sondeOuvrirGml(dossier, chemin, "fixture", "llib_frt", Logique.SONDE_FIXTURE_ATTENDU);
+  // Ligne du panneau (« Cache ONF du … »), '' sans cache.
+  function cacheLigne() {
+    const id = visionId();
+    return id ? Logique.cacheLignePanneau(Logique.lireRegistre(reglages, id)) : "";
   }
 
-  // Une couche, puis la suivante (requêtes l'une après l'autre).
-  // Une exception arrête la sonde proprement : elle est notée, le compte rendu est écrit, sondeEnCours revient à faux.
-  function sondeErreur(dossier, ou, e) {
-    sondeNoter("EXCEPTION (" + ou + ") : " + e);
-    sondeFin(dossier);
-  }
-
-  function sondeCouche(i, emprise, dossier) {
-    let lance = false;
-    try {
-      lance = sondeCoucheLancer(i, emprise, dossier);
-    } catch (e) {
-      sondeNoter("EXCEPTION (requête " + (i + 1) + ") : " + e);
-      lance = false;
-    } finally {
-      // Pas de requête en vol (fin normale ou exception) : la sonde se termine ici.
-      if (!lance) sondeFin(dossier);
-    }
-  }
-
-  // Rend true si une requête est partie (sa réponse poursuivra la sonde), false si la sonde est finie.
-  function sondeCoucheLancer(i, emprise, dossier) {
-    const couches = Logique.SONDE_ONF.couches;
-    if (i >= couches.length) return false;
-    const couche = couches[i];
-    const url = Logique.sondeUrlGetFeature(couche, emprise);
-    sondeNoter("Requête " + couche + " : " + url);
-    const t0 = Date.now();
-    let fini = false;
-    const req = iface.createHttpRequest();
-    const suite = function (statut, texte, erreur, longueur) {
-      if (fini) return;
-      fini = true;
-      Qt.callLater(function () { sondeReponseSure(i, emprise, dossier, couche, statut, texte, erreur, longueur, Date.now() - t0); });
+  // Emprise visible en EPSG:2154 : les quatre coins de l'écran (carte tournée), par mapSettings.screenToCoordinate
+  // (qgsquickmapsettings.h l. 236, Q_INVOKABLE, coordonnées de l'élément de carte), reprojetés si la carte n'est pas en
+  // EPSG:2154 (GeometryUtils.reprojectPoint). Repli : visibleExtent (l. 72). null si illisible.
+  function empriseCarteCache() {
+    const canvas = iface.mapCanvas();
+    const ms = canvas.mapSettings;
+    const crs = ms.destinationCrs;
+    const enLambert = String(crs.authid || "") === "EPSG:2154";
+    const but = CoordinateReferenceSystemUtils.fromDescription("EPSG:2154");
+    const vers2154 = function (x, y) {
+      if (enLambert) return { x: Number(x), y: Number(y) };
+      const p = GeometryUtils.reprojectPoint(GeometryUtils.point(Number(x), Number(y)), crs, but);
+      return { x: Number(p.x), y: Number(p.y) };
     };
-    req.timeout = 120000;
-    req.onload = function () { suite(Number(req.status), String(req.responseText || ""), "", String(req.getResponseHeader("Content-Length") || "")); };
-    req.onerror = function (code, texte) { suite(Number(req.status), "", "erreur réseau " + code + " : " + texte, ""); };
-    req.ontimeout = function () { suite(0, "", "délai dépassé", ""); };
-    req.onaborted = function () { suite(0, "", "requête annulée", ""); };
-    req.open("GET", url);
-    req.send();
-    return true;
-  }
-
-  function sondeReponseSure(i, emprise, dossier, couche, statut, texte, erreur, longueur, dureeMs) {
-    let suivante = true;
     try {
-      sondeReponse(i, emprise, dossier, couche, statut, texte, erreur, longueur, dureeMs);
-    } catch (e) {
-      suivante = false;
-      sondeErreur(dossier, "réponse " + couche, e);
-    } finally {
-      if (suivante) sondeCouche(i + 1, emprise, dossier);
-    }
-  }
-
-  function sondeReponse(i, emprise, dossier, couche, statut, texte, erreur, longueur, dureeMs) {
-    const analyse = texte !== "" ? Logique.sondeAnalyserReponse(texte) : null;
-    let octets = 0;
-    let chemin = "";
-    if (texte !== "") {
-      const o = Logique.octetsUtf8(texte);
-      octets = o.length;
-      chemin = dossier + "/" + couche + ".gml";
-      if (!FileUtils.writeFileContent(chemin, Logique.arrayBufferExact(o))) {
-        sondeNoter("  " + couche + " : écriture du GML reçu ÉCHOUÉE (" + chemin + ")");
-        chemin = "";
+      const w = Number(canvas.width);
+      const h = Number(canvas.height);
+      if (w > 0 && h > 0) {
+        const coins = [[0, 0], [w, 0], [w, h], [0, h]].map(function (c) {
+          const p = ms.screenToCoordinate(Qt.point(c[0], c[1]));
+          return vers2154(p.x, p.y);
+        });
+        const e = Logique.cacheEmpriseDesPoints(coins);
+        if (e) return e;
       }
-    }
-    sondeNoter(Logique.sondeLigneReponse(couche, { statut: statut, octets: octets, dureeMs: dureeMs, erreur: erreur, analyse: analyse })
-      + (longueur !== "" ? " (Content-Length " + longueur + ")" : ""));
-    let ouvert = false;
-    if (chemin !== "" && analyse && analyse.nbObjets > 0) {
-      ouvert = sondeOuvrirGml(dossier, chemin, couche, Logique.SONDE_ONF.libelles[couche], null);
-    } else if (analyse && analyse.complete && analyse.nbObjets === 0) {
-      sondeNoter("  " + couche + " : aucun objet sur cette emprise");
-      ouvert = true;
-    }
-    if (!ouvert && statut === 200) sondeVoieA(dossier, couche, emprise);
+    } catch (e) { /* repli ci-dessous */ }
+    const r = ms.visibleExtent;
+    return Logique.cacheEmpriseDesPoints([vers2154(r.xMinimum, r.yMinimum), vers2154(r.xMaximum, r.yMinimum),
+      vers2154(r.xMaximum, r.yMaximum), vers2154(r.xMinimum, r.yMaximum)]);
   }
 
-  // Bouton « avec réseau » : mode "carte" (emprise visible) ou "serre" (zone d'essai du massif de la Serre).
-  function sonderReseau(mode) {
-    if (sondeEnCours) return;
-    const dossier = Logique.sondeDossier(dossierProjet());
-    sondeDebut(mode === "serre" ? "avec réseau, massif de la Serre (Jura)" : "avec réseau, emprise de la carte");
-    if (dossier === "") { sondeNoter("Dossier du projet inconnu : sonde arrêtée."); return; }
-    let brute = null;
-    if (mode === "serre") {
-      brute = Logique.SONDE_ONF.empriseSerre;
-    } else {
-      try { brute = sondeEmpriseCarte(); } catch (e) { sondeNoter("Carte illisible : " + e); brute = null; }
-    }
-    const r = Logique.sondeEmprise(brute, Controles.EMPRISE_VRAISEMBLANCE);
-    if (r.message) sondeNoter(r.message);
-    if (!r.ok) { sondeFin(dossier); return; }
-    sondeNoter("Emprise demandée (EPSG:2154, x est, y nord) : " + [r.emprise.xmin, r.emprise.ymin, r.emprise.xmax, r.emprise.ymax].map(function (v) { return Math.round(v); }).join(", "));
-    sondeEnCours = true;
+  // Bouton « Mettre en cache les couches ONF de cette zone ».
+  function mettreEnCacheOnf() {
+    if (cacheEnCours) return;
+    let emprise = null;
+    try { emprise = empriseCarteCache(); } catch (e) { emprise = null; }
+    const prep = Logique.cachePreparer({
+      visionId: visionId(), dossierProjet: dossierProjet(), emprise: emprise,
+      vraisemblance: Controles.EMPRISE_VRAISEMBLANCE, maintenant: function () { return new Date(); }
+    });
+    if (!prep.ok) { message(prep.message); return; }
+    cacheEnCours = true;
+    message(textePendantCache);
+    cacheRequete(0, prep, {});
+  }
+
+  function cacheFin(texte) {
+    cacheEnCours = false;
+    message(texte);
+    registreChange();
+  }
+
+  // Une couche, puis la suivante ; toute exception termine proprement (cacheEnCours revient à faux, rien n'est inscrit).
+  function cacheRequete(i, prep, reponses) {
+    const couches = Logique.CACHE_ONF.couches;
     try {
-      sondeFichierEssai(dossier);
+      if (i >= couches.length) { cacheFin(cacheEnregistrer(prep, reponses).message); return; }
+      const couche = couches[i].couche;
+      const url = Logique.cacheUrlGetFeature(couche, prep.emprise);
+      let fini = false;
+      const req = iface.createHttpRequest();
+      const suite = function (statut, texte, erreur) {
+        if (fini) return;
+        fini = true;
+        Qt.callLater(function () { cacheReponse(i, prep, reponses, couche, { statut: statut, texte: texte, erreur: erreur }); });
+      };
+      req.timeout = 120000;
+      req.onload = function () { suite(Number(req.status), String(req.responseText || ""), ""); };
+      req.onerror = function (code, texte) { suite(Number(req.status), "", "erreur réseau " + code + " : " + texte); };
+      req.ontimeout = function () { suite(0, "", "délai dépassé"); };
+      req.onaborted = function () { suite(0, "", "requête annulée"); };
+      req.open("GET", url);
+      req.send();
     } catch (e) {
-      sondeErreur(dossier, "fichier d'essai", e);
+      cacheFin(Logique.TEXTES_CACHE_ONF_PROPOSES.echecLocal);
+    }
+  }
+
+  function cacheReponse(i, prep, reponses, couche, r) {
+    try {
+      const j = Logique.cacheJugerReponse(couche, r);
+      if (!j.ok) { cacheFin(j.message); return; }
+      reponses[couche] = { texte: r.texte, nbObjets: j.nbObjets };
+    } catch (e) {
+      cacheFin(Logique.TEXTES_CACHE_ONF_PROPOSES.echecLocal);
       return;
     }
-    sondeCouche(0, r.emprise, dossier);
+    cacheRequete(i + 1, prep, reponses);
   }
 
-  // Bouton « hors réseau » (mode avion) : le fichier d'essai et les GML déjà reçus, rouverts sans réseau.
-  function sonderHorsReseau() {
-    if (sondeEnCours) return;
-    const dossier = Logique.sondeDossier(dossierProjet());
-    sondeDebut("hors réseau, fichiers déjà reçus");
-    if (dossier === "") { sondeNoter("Dossier du projet inconnu : sonde arrêtée."); return; }
-    sondeEnCours = true;
-    try {
-      sondeFichierEssai(dossier);
-      const couches = Logique.SONDE_ONF.couches;
-      for (let i = 0; i < couches.length; i++) {
-        const chemin = dossier + "/" + couches[i] + ".gml";
-        if (FileUtils.fileExists(chemin)) sondeOuvrirGml(dossier, chemin, couches[i], Logique.SONDE_ONF.libelles[couches[i]], null);
-        else sondeNoter("  " + couches[i] + " : aucun GML reçu auparavant (" + chemin + ")");
-      }
-    } catch (e) {
-      sondeNoter("EXCEPTION (hors réseau) : " + e);
-    } finally {
-      sondeFin(dossier);
-    }
+  function cacheEnregistrer(prep, reponses) {
+    return Logique.cacheEnregistrer({
+      visionId: visionId(),
+      dossierProjet: dossierProjet(),
+      reglages: reglages,
+      horodatage: prep.horodatage,
+      date: prep.date,
+      emprise: prep.emprise,
+      reponses: reponses,
+      styles: StylesOnf.STYLES_ONF,
+      vraisemblance: Controles.EMPRISE_VRAISEMBLANCE,
+      ecrireFichier: ecrireFichier,
+      effacerFichier: effacerFichier,
+      existe: function (chemin) { return FileUtils.fileExists(chemin); },
+      ouvrirCouche: function (uri, nom) { return LayerUtils.loadVectorLayer(uri, nom); },
+      creerIterateur: function (l) { return LayerUtils.createFeatureIterator(l); },
+      // QgsMapLayer::crs : Q_PROPERTY en écriture (QGIS 3a92eb3 qgsmaplayer.h l. 90) ; saveVectorLayerAs l'écrit dans le GeoPackage
+      // (QField qflayerutils.cpp l. 712 : layer->crs()).
+      imposerSysteme: function (l) { l.crs = CoordinateReferenceSystemUtils.fromDescription("EPSG:2154"); },
+      reecrireCouche: reecrireCouche,
+      retirerCacheDeLaCarte: retirerCacheDeLaCarte,
+      ajouterCache: ajouterCache
+    });
   }
-  // ==== sonde 053 : fin
+  // ==== cache ONF : fin
 }

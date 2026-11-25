@@ -283,10 +283,10 @@ test('retirerCouche : message quand la copie sert encore', async () => {
 });
 
 // ============================================================================ forme du plugin
-// Liste explicite (mission 012 : vision-controles.mjs ; mission 010 : vision-styles.mjs).
+// Liste explicite (mission 012 : vision-controles.mjs ; mission 010 : vision-styles.mjs ; mission 053 : vision-styles-onf.mjs).
 const FICHIERS = [
   'main.qml', 'Vision.qml', 'Panneau.qml',
-  'vision-logique.mjs', 'vision-controles.mjs', 'vision-styles.mjs', 'vision-bibliotheque.mjs',
+  'vision-logique.mjs', 'vision-controles.mjs', 'vision-styles.mjs', 'vision-bibliotheque.mjs', 'vision-styles-onf.mjs',
   'metadata.txt', 'icon.svg',
 ];
 const lire = (f) => readFileSync(join(PLUGIN, f), 'utf8');
@@ -334,7 +334,7 @@ test('forme : le QML appelle les fonctions de QField du plan (§ 5) ; rmFile pas
   }
 });
 
-test('empaquetage : plugin-vision.zip a main.qml à sa racine et exactement les neuf fichiers du plugin (dont vision-controles.mjs, vision-styles.mjs et vision-bibliotheque.mjs)', async () => {
+test('empaquetage : plugin-vision.zip a main.qml à sa racine et exactement les dix fichiers du plugin (dont vision-controles.mjs, vision-styles.mjs, vision-bibliotheque.mjs et vision-styles-onf.mjs)', async () => {
   const m = await M();
   const { empaqueter } = await import(join(PLUGIN, 'empaqueter.mjs'));
   const sortie = mkdtempSync(join(tmpdir(), 'vision-plugin-'));

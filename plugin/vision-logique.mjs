@@ -177,22 +177,42 @@ export function texteDe(valeur) {
   return decoderUtf8(octetsDe(valeur));
 }
 
-// Octets UTF-8 d'un texte (le moteur de QML n'a pas TextEncoder), pour écrire un .qml.
-export function octetsUtf8(texte) {
-  const sortie = [];
-  const t = String(texte);
-  for (let i = 0; i < t.length; i++) {
-    let c = t.charCodeAt(i);
-    if (c >= 0xd800 && c <= 0xdbff && i + 1 < t.length) {
-      const d = t.charCodeAt(i + 1);
-      if (d >= 0xdc00 && d <= 0xdfff) { c = 0x10000 + ((c - 0xd800) << 10) + (d - 0xdc00); i++; }
-    }
-    if (c < 0x80) sortie.push(c);
-    else if (c < 0x800) sortie.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
-    else if (c < 0x10000) sortie.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
-    else sortie.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 0x3f), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+// Octets UTF-8 d'un texte (le moteur de QML n'a pas TextEncoder), pour écrire un .qml ou un GML reçu.
+// Mission 053 : deux passes (longueur, puis remplissage d'un Uint8Array de la taille exacte), au lieu d'un tableau
+// JavaScript d'un nombre par octet : le pic de mémoire relevé pour le GML reçu (docs/referentiels/cache-zone-qfield.md
+// § 1.3) tombe à la taille du résultat. Même sortie qu'avant (tests/cache-onf-053.test.mjs).
+function pointDeCode(t, i) {
+  const c = t.charCodeAt(i);
+  if (c >= 0xd800 && c <= 0xdbff && i + 1 < t.length) {
+    const d = t.charCodeAt(i + 1);
+    if (d >= 0xdc00 && d <= 0xdfff) return { c: 0x10000 + ((c - 0xd800) << 10) + (d - 0xdc00), n: 2 };
   }
-  return new Uint8Array(sortie);
+  return { c: c, n: 1 };
+}
+
+export function octetsUtf8(texte) {
+  const t = String(texte);
+  let longueur = 0;
+  for (let i = 0; i < t.length;) {
+    const p = pointDeCode(t, i);
+    longueur += p.c < 0x80 ? 1 : (p.c < 0x800 ? 2 : (p.c < 0x10000 ? 3 : 4));
+    i += p.n;
+  }
+  const sortie = new Uint8Array(longueur);
+  let k = 0;
+  for (let i = 0; i < t.length;) {
+    const p = pointDeCode(t, i);
+    const c = p.c;
+    i += p.n;
+    if (c < 0x80) { sortie[k++] = c; } else if (c < 0x800) {
+      sortie[k++] = 0xc0 | (c >> 6); sortie[k++] = 0x80 | (c & 0x3f);
+    } else if (c < 0x10000) {
+      sortie[k++] = 0xe0 | (c >> 12); sortie[k++] = 0x80 | ((c >> 6) & 0x3f); sortie[k++] = 0x80 | (c & 0x3f);
+    } else {
+      sortie[k++] = 0xf0 | (c >> 18); sortie[k++] = 0x80 | ((c >> 12) & 0x3f); sortie[k++] = 0x80 | ((c >> 6) & 0x3f); sortie[k++] = 0x80 | (c & 0x3f);
+    }
+  }
+  return sortie;
 }
 
 // Un ArrayBuffer de la taille exacte des octets (celui que reçoit FileUtils.writeFileContent).
@@ -632,16 +652,21 @@ export function lireRegistre(reglages, visionId) {
   return etatRegistre(reglages, visionId).liste;
 }
 
-function memeCouche(e, zip, couche) {
-  return !!e && typeof e === 'object' && e.zip === zip && e.couche === couche;
+// Mission 053 (forme R2 corrigée, docs/referentiels/cache-zone-qfield.md § 4) : la clé est (sorte, zip, couche). Une entrée
+// de zip n'a pas de `cache` ; une entrée du cache ONF a `cache: 'onf'` et pas de `zip` : les deux ne se confondent jamais.
+function memeCouche(e, zip, couche, cache) {
+  if (!e || typeof e !== 'object') return false;
+  const sorte = typeof cache === 'string' ? cache : '';
+  const sienne = typeof e.cache === 'string' ? e.cache : '';
+  return sienne === sorte && e.zip === zip && e.couche === couche;
 }
 
-// Remplace l'entrée de même (zip, couche) à sa place, ou ajoute à la fin.
+// Remplace l'entrée de même (sorte, zip, couche) à sa place, ou ajoute à la fin.
 export function inscrire(reglages, visionId, entree) {
   const liste = lireRegistre(reglages, visionId).slice();
   let place = -1;
   for (let i = 0; i < liste.length; i++) {
-    if (memeCouche(liste[i], entree.zip, entree.couche)) {
+    if (memeCouche(liste[i], entree.zip, entree.couche, entree.cache)) {
       if (place < 0) { place = i; liste[i] = entree; } else { liste.splice(i, 1); i--; }
     }
   }
@@ -654,7 +679,7 @@ export function retirer(reglages, visionId, cible) {
   const reste = [];
   let retiree = false;
   for (let i = 0; i < liste.length; i++) {
-    if (memeCouche(liste[i], cible.zip, cible.couche)) retiree = true; else reste.push(liste[i]);
+    if (memeCouche(liste[i], cible.zip, cible.couche, cible.cache)) retiree = true; else reste.push(liste[i]);
   }
   if (!retiree) return { retiree: false, zipInutile: false };
   ecrireRegistre(reglages, visionId, reste);
@@ -679,6 +704,7 @@ export function zipUtilise(reglages, visionId, zip) {
 // lus dans le zip, entrées des versions 0.2.x) ; sans « .. ».
 function entreeSaine(e) {
   if (!e || typeof e !== 'object') return false;
+  if (e.cache !== undefined) return entreeDuCacheSaine(e);
   if (!estNomDeZip(e.zip)) return false;
   if (typeof e.couche !== 'string' || e.couche === '') return false;
   if (typeof e.chemin === 'string') {
@@ -988,6 +1014,8 @@ function cheminsProteges(dossier, autres) {
   for (let i = 0; i < autres.length; i++) {
     const e = autres[i];
     if (!e || typeof e !== 'object' || typeof e.chemin !== 'string') continue;
+    // Mission 053 : le chemin d'une entrée du cache ONF est relatif à vision-imports/_cache-onf/ (R2, point 4).
+    if (e.cache !== undefined) { proteger(dossier + '/' + CACHE_ONF.dossier + '/' + e.chemin); continue; }
     proteger(dossier + '/' + e.chemin);
     if (estNomDeZip(e.zip) && estNomSimple(e.couche)) proteger(dossier + '/' + dossierDuZip(e.zip) + '/' + e.couche + '.gpkg');
   }
@@ -1084,6 +1112,9 @@ function importerZipSuivi(ctx, suivi) {
   if (!ctx || !estUuid(ctx.visionId)) return vide("Projet non Vision (vision_id absent ou invalide) : rien n'est importé.");
   const nomZip = ctx.nomZip;
   if (!estNomDeZip(nomZip)) return vide(`Fichier refusé : « ${nomZip} » n'est pas un nom de zip simple (.zip).`);
+  // Mission 053 (R2, point 5) : le dossier d'un zip est son nom sans « .zip » ; un zip dont le dossier serait celui du cache ONF
+  // est refusé avant toute lecture (rien n'est copié ni inscrit).
+  if (estDossierReserve(dossierDuZip(nomZip))) return vide(messageZipReserve(nomZip));
   if (!dossierProjetSain(ctx.dossierProjet)) return vide("Dossier du projet inconnu : rien n'est importé.");
   let noms;
   try {
@@ -1340,8 +1371,11 @@ export function demarrerProjet(ctx) {
   const rechargees = [];
   const absentes = [];
   const illisibles = [];
+  const entreesCache = [];
   for (let i = 0; i < saines.length; i++) {
     const e = saines[i];
+    // Mission 053 : le cache ONF est rechargé après les couches des zips (cache en tête de liste, arbitrage n° 6).
+    if (e.cache !== undefined) { entreesCache.push(e); continue; }
     if (typeof e.chemin === 'string') {
       // Copie GeoPackage (ADR 0008) : rechargée depuis le disque, le zip n'est pas relu ; son .qml
       // est à côté, QGIS l'applique seul au chargement.
@@ -1361,6 +1395,7 @@ export function demarrerProjet(ctx) {
     if (!estSourceRaster(source)) r.couche.readOnly = true;
     rechargees.push({ zip: e.zip, couche: e.couche });
   }
+  const cache = rechargerCacheOnf(ctx, dossier, entreesCache, liberer);
   const fondEmbarque = chargerFondEmbarque(ctx, ctx.dossierProjet);
   const lignes = [];
   if (etat.illisible) lignes.push("registre illisible : il sera remplacé au prochain ajout d'un zip");
@@ -1385,8 +1420,9 @@ export function demarrerProjet(ctx) {
       : `${illisibles.length} couches n'ont pas pu être rechargées : illisibles (${nomsDe(illisibles)})`);
   }
   if (fondEmbarque === 'illisible') lignes.push(MESSAGE_FOND_ILLISIBLE);
+  if (cache.manquantes.length > 0) lignes.push(TEXTES_CACHE_ONF_PROPOSES.cacheIllisible);
   return {
-    actif: true, boutonVisible: true, visionId, rechargees, absentes, illisibles, douteuses, fondEmbarque,
+    actif: true, boutonVisible: true, visionId, rechargees, absentes, illisibles, douteuses, fondEmbarque, cache,
     message: lignes.join('\n'),
   };
 }
@@ -1461,70 +1497,179 @@ export function retirerCouche(ctx) {
   return { efface: e.efface, message: `${debut}${phrase} ${e.message}` };
 }
 
-// --------------------------------------------------------------------------- sonde 053 (outil d'essai)
+// --------------------------------------------------------------------------- cache ONF (mission 053, étape 1 ter)
 
-// Mission 053, étape 1 bis, temps 2, premier pas : sonde d'essai du cache de zone des couches ONF
-// (docs/referentiels/cache-zone-qfield.md). Elle ne fait que MESURER sur le Samsung : ouvrir un petit GML,
-// interroger le WFS de l'ONF (GetFeature WFS 1.0.0 et BBOX), tenter la voie A si le GML ne s'ouvre pas.
-// Rien n'est inscrit au registre, rien n'est ajouté à la carte ni effacé ; les fichiers vont dans
-// vision-imports/_sonde-053/. Textes provisoires (outil d'essai), jamais définitifs.
-// Plafonds : arbitrage n° 5 de Pascal (fiche 053) : 20 km de côté, 5 000 objets par couche.
-// Zone d'essai par défaut : massif de la Serre (Jura, cas Serre_EA2026 de JFC), WGS84 lon 5,585° E, lat 47,185° N,
-// soit x 895 717, y 6 679 283 en EPSG:2154 (pyproj 3.8.0, ordre x est, y nord ; tests/sonde-onf-053.test.mjs).
-export const SONDE_ONF = {
-  version: 'sonde-053-1',
+// Cache de zone des couches ONF (fiche pilotage/missions/053-couches-onf-wfs.md, arbitrages n° 1 et 5 à 7 ; preuves dans
+// docs/referentiels/cache-zone-qfield.md). Voie B, prouvée sur le Samsung par la sonde (QField 4.3.8, essais n° 1 à 4) :
+// GetFeature WFS 1.0.0 + BBOX par iface.createHttpRequest (Vision.qml), GML 2 écrit dans vision-imports/, ouvert par le
+// pilote GML de GDAL avec un schéma .gfs écrit par Vision (système EPSG:2154 et type de géométrie fixés, champs réels du
+// service, gml_id écarté), réécrit en GeoPackage par saveVectorLayerAs, style adapté écrit à côté (ADR 0008).
+// Inscription : forme R2 corrigée (cache-zone-qfield.md § 4) : vision-imports/_cache-onf/<horodatage>/<couche>.gpkg.
+// Plafonds (arbitrage n° 5) : 20 km de côté, 5 000 objets par couche ; une seule zone (arbitrage n° 7).
+export const CACHE_ONF = {
+  sorte: 'onf',
   service: 'http://ws.carmencarto.fr/WFS/105/ONF_Forets',
-  couches: ['FOR_PUBL_FR', 'PARC_PUBL_FR', 'PRS_FR'],
-  libelles: { FOR_PUBL_FR: 'llib_frt', PARC_PUBL_FR: 'llib_frt', PRS_FR: 'llib_prs' },
+  dossier: '_cache-onf',
+  systeme: 'EPSG:2154',
   coteMax: 20000,
   objetsMax: 5000,
-  dossier: '_sonde-053',
-  serre: { lon: 5.585, lat: 47.185, x: 895717, y: 6679283 },
-  empriseSerre: { xmin: 893717, ymin: 6677283, xmax: 897717, ymax: 6681283 },
+  // Champs : DescribeFeatureType de la mesure n° 1 (docs/referentiels/brut/onf/mesure-2026-11-25.md), tous String.
+  // wkb : Qgis::WkbType (QGIS 3a92eb3) et type OGR du .gfs : 6 MultiPolygon, 1 Point.
+  couches: [
+    { couche: 'FOR_PUBL_FR', nom: 'Forêts publiques (ONF)', wkb: 6, un: 'forêt', plusieurs: 'forêts',
+      champs: ['iidtn_frt', 'llib_frt', 'cdom_frt', 'cinse_dep'] },
+    { couche: 'PARC_PUBL_FR', nom: 'Parcelles forestières (ONF)', wkb: 6, un: 'parcelle', plusieurs: 'parcelles',
+      champs: ['iidtn_frt', 'llib_frt', 'ccod_prf'] },
+    { couche: 'PRS_FR', nom: 'Points de rencontre des secours (ONF)', wkb: 1, un: 'point de rencontre', plusieurs: 'points de rencontre',
+      champs: ['iidtn_prs', 'cinse_dep', 'loff_prs', 'cdfci_prs', 'ccod_cmat', 'ccod_ctps', 'llib_prs', 'lobs_prs', 'qlat_prs',
+        'qlon_prs', 'qdis_prs', 'llib_com', 'cinse_com'] },
+  ],
 };
 
-// Fichier GML 2 d'essai, à la forme des réponses de MapServer 7 (espace ms:, msGeometry, gml:coordinates « x,y »),
-// sans schemaLocation (aucun téléchargement de schéma) : deux forêts FICTIVES, accents, EPSG:2154. La première
-// contient le point de la Serre ; la seconde est au nord-ouest. Valeurs attendues à la lecture : SONDE_FIXTURE_ATTENDU.
-export const SONDE_FIXTURE_ATTENDU = [
-  { iidtn_frt: 'F39ESSAI1', llib_frt: 'Forêt d’essai de la Serre (fictive), été' },
-  { iidtn_frt: 'F39ESSAI2', llib_frt: 'Forêt d’essai n° 2 : Ç à ô ü œ' },
-];
+// Textes validés par Pascal le 25 novembre 2026 (« Je valide », fiche 053), mot pour mot ; nombres et date remplis ici.
+export const TEXTES_CACHE_ONF = {
+  bouton: 'Mettre en cache les couches ONF de cette zone',
+  pendant: 'Téléchargement des couches ONF…',
+  zoneTropGrande: 'Zone trop grande (plus de 20 km de côté) : zoomez, puis recommencez.',
+  pasDeReseau: "Pas de réseau : le cache ONF n'est pas mis à jour, l'ancien est gardé.",
+  reponseIncomplete: "Réponse incomplète du service ONF : le cache n'est pas mis à jour, l'ancien est gardé.",
+};
 
-function anneauGml(xmin, ymin, xmax, ymax) {
-  return `${xmin},${ymin} ${xmax},${ymin} ${xmax},${ymax} ${xmin},${ymax} ${xmin},${ymin}`;
+// TEXTES PROPOSÉS PAR LE DEV, NON VALIDÉS par Pascal (cas que les textes validés ne couvrent pas) : à soumettre avant toute
+// publication hors préversion ; un seul endroit à changer. Voir le rendu de l'étape 1 ter.
+export const TEXTES_CACHE_ONF_PROPOSES = {
+  // Écriture ou relecture du GML ou du GeoPackage refusée, nombre d'objets relus différent, système ou type faux, dossier
+  // du projet inconnu : rien d'autre que l'appareil n'est en cause.
+  echecLocal: "Enregistrement du cache ONF impossible : le cache n'est pas mis à jour, l'ancien est gardé.",
+  // Emprise de la carte illisible, ou hors de France métropolitaine en Lambert 93.
+  horsFrance: "Carte hors de France métropolitaine : le cache ONF n'est pas mis à jour, l'ancien est gardé.",
+  // À la réouverture : une couche du cache absente ou illisible sur l'appareil.
+  cacheIllisible: "Cache ONF illisible : il n'est pas affiché ; remettez-le en cache avec réseau.",
+};
+
+export function messageZipReserve(nomZip) {
+  // Texte proposé, NON VALIDÉ (garde R2, point 5).
+  return `${nomZip} : nom réservé par Vision (cache ONF), rien n'est importé.`;
 }
 
-function membreFixture(f, b) {
-  return '    <gml:featureMember>\n'
-    + '      <ms:FOR_PUBL_FR>\n'
-    + `        <gml:boundedBy><gml:Box srsName="EPSG:2154"><gml:coordinates>${b[0]},${b[1]} ${b[2]},${b[3]}</gml:coordinates></gml:Box></gml:boundedBy>\n`
-    + '        <ms:msGeometry><gml:MultiPolygon srsName="EPSG:2154"><gml:polygonMember><gml:Polygon><gml:outerBoundaryIs><gml:LinearRing>'
-    + `<gml:coordinates>${anneauGml(b[0], b[1], b[2], b[3])}</gml:coordinates>`
-    + '</gml:LinearRing></gml:outerBoundaryIs></gml:Polygon></gml:polygonMember></gml:MultiPolygon></ms:msGeometry>\n'
-    + `        <ms:iidtn_frt>${f.iidtn_frt}</ms:iidtn_frt>\n`
-    + `        <ms:llib_frt>${f.llib_frt}</ms:llib_frt>\n`
-    + '        <ms:cdom_frt>FD</ms:cdom_frt>\n'
-    + '        <ms:cinse_dep>D39</ms:cinse_dep>\n'
-    + '      </ms:FOR_PUBL_FR>\n'
-    + '    </gml:featureMember>\n';
+export function estDossierReserve(nom) {
+  return String(nom) === CACHE_ONF.dossier;
 }
 
-export function sondeFixtureGml() {
-  const boites = [[895200, 6678800, 896200, 6679800], [893900, 6680500, 894400, 6681000]];
-  return '<?xml version=\'1.0\' encoding="UTF-8" ?>\n'
-    + '<wfs:FeatureCollection xmlns:ms="http://mapserver.gis.umn.edu/mapserver" xmlns:wfs="http://www.opengis.net/wfs" '
-    + 'xmlns:gml="http://www.opengis.net/gml" xmlns:ogc="http://www.opengis.net/ogc">\n'
-    + '    <gml:boundedBy><gml:Box srsName="EPSG:2154"><gml:coordinates>893900,6678800 896200,6681000</gml:coordinates></gml:Box></gml:boundedBy>\n'
-    + membreFixture(SONDE_FIXTURE_ATTENDU[0], boites[0])
-    + membreFixture(SONDE_FIXTURE_ATTENDU[1], boites[1])
-    + '</wfs:FeatureCollection>\n';
+export function coucheOnf(couche) {
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) if (CACHE_ONF.couches[i].couche === couche) return CACHE_ONF.couches[i];
+  return null;
 }
 
-// Dossier de la sonde : <dossier du projet>/vision-imports/_sonde-053 ; '' si le dossier du projet n'est pas sain.
-export function sondeDossier(dossierProjet) {
+function nombreDe(n, c) {
+  // « 1 point de rencontre », « 4 forêts » (exemple validé) ; 0 et 1 au singulier (usage du français).
+  return n + ' ' + (n < 2 ? c.un : c.plusieurs);
+}
+
+function deuxChiffres(n) {
+  return (n < 10 ? '0' : '') + n;
+}
+
+// Date affichée « JJ/MM/AAAA », à l'heure de l'appareil.
+export function cacheDateAffichee(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (!isFinite(d.getTime())) return '';
+  return deuxChiffres(d.getDate()) + '/' + deuxChiffres(d.getMonth() + 1) + '/' + d.getFullYear();
+}
+
+// « 4 forêts, 53 parcelles, 1 point de rencontre » ; compte = { FOR_PUBL_FR: n, PARC_PUBL_FR: n, PRS_FR: n }.
+function decompte(compte) {
+  const parts = [];
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    const c = CACHE_ONF.couches[i];
+    parts.push(nombreDe(Number(compte[c.couche]) || 0, c));
+  }
+  return parts.join(', ');
+}
+
+export function messageCacheReussi(compte, date) {
+  return `Couches ONF en cache : ${decompte(compte)} (zone du ${cacheDateAffichee(date)}).`;
+}
+
+export function messageTropDObjets(couche) {
+  const c = coucheOnf(couche);
+  return `Trop d'objets dans cette zone (plus de 5 000 ${c ? c.plusieurs : 'objets'}) : zoomez, puis recommencez.`;
+}
+
+// Horodatage d'une génération, en UTC : AAAAMMJJTHHMMSSZ (chiffres, « T », « Z » : nom de dossier sûr).
+export function cacheHorodatage(date) {
+  const d = date instanceof Date ? date : new Date();
+  return '' + d.getUTCFullYear() + deuxChiffres(d.getUTCMonth() + 1) + deuxChiffres(d.getUTCDate())
+    + 'T' + deuxChiffres(d.getUTCHours()) + deuxChiffres(d.getUTCMinutes()) + deuxChiffres(d.getUTCSeconds()) + 'Z';
+}
+
+const MOTIF_HORODATAGE = /^\d{8}T\d{6}Z$/;
+
+// <dossier du projet>/vision-imports/_cache-onf ; '' si le dossier du projet n'est pas sain.
+export function cacheDossier(dossierProjet) {
   const d = dossierCopies(dossierProjet);
-  return d === '' ? '' : d + '/' + SONDE_ONF.dossier;
+  return d === '' ? '' : d + '/' + CACHE_ONF.dossier;
+}
+
+// Fichiers d'une couche d'une génération : relatif (au dossier du cache, celui du registre), gml, gfs, gpkg, qml (absolus).
+export function cacheChemins(dossierProjet, horodatage, couche) {
+  const base = cacheDossier(dossierProjet);
+  if (base === '' || !MOTIF_HORODATAGE.test(String(horodatage)) || coucheOnf(couche) === null) return null;
+  const racine = base + '/' + horodatage + '/' + couche;
+  return { relatif: horodatage + '/' + couche + '.gpkg', gml: racine + '.gml', gfs: racine + '.gfs', gpkg: racine + '.gpkg', qml: racine + '.qml' };
+}
+
+// Suffixes des fichiers d'une couche du cache (annexes SQLite et GDAL comprises), pour l'effacement d'une génération.
+const SUFFIXES_CACHE = ['.gpkg', '.qml', '.gpkg-wal', '.gpkg-shm', '.gpkg.aux.xml', '.gml', '.gfs'];
+
+// Garde avant toute écriture ou tout effacement dans le cache : <vision-imports>/_cache-onf/<horodatage>/<couche><suffixe>,
+// rien d'autre (même garde de dossier que les copies : peutEffacer).
+export function peutToucherCache(chemin, dossierImports) {
+  if (!peutEffacer(chemin, dossierImports) || String(chemin).indexOf('|') >= 0) return false;
+  const reste = String(chemin).substring(dossierImports.length + 1).split('/');
+  if (reste.length !== 3 || reste[0] !== CACHE_ONF.dossier || !MOTIF_HORODATAGE.test(reste[1])) return false;
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    for (let k = 0; k < SUFFIXES_CACHE.length; k++) if (reste[2] === CACHE_ONF.couches[i].couche + SUFFIXES_CACHE[k]) return true;
+  }
+  return false;
+}
+
+// Entrée du registre : { cache: 'onf', couche, chemin: '<horodatage>/<couche>.gpkg', emprise, date (ISO), objets }.
+function entreeDuCacheSaine(e) {
+  if (e.cache !== CACHE_ONF.sorte || e.zip !== undefined || coucheOnf(e.couche) === null) return false;
+  if (typeof e.chemin !== 'string' || e.chemin.indexOf('|') >= 0 || e.chemin.indexOf('\\') >= 0) return false;
+  const segs = e.chemin.split('/');
+  if (segs.length !== 2 || !MOTIF_HORODATAGE.test(segs[0]) || segs[1] !== e.couche + '.gpkg') return false;
+  if (typeof e.objets !== 'number' || !(e.objets >= 0) || Math.floor(e.objets) !== e.objets || e.objets > CACHE_ONF.objetsMax) return false;
+  return typeof e.date === 'string' && isFinite(new Date(e.date).getTime());
+}
+
+// Entrées saines du cache ONF, dans l'ordre de CACHE_ONF.couches.
+export function entreesDuCache(liste) {
+  const r = [];
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    for (let k = 0; k < (liste || []).length; k++) {
+      const e = liste[k];
+      if (e && typeof e === 'object' && e.cache !== undefined && entreeDuCacheSaine(e) && e.couche === CACHE_ONF.couches[i].couche) { r.push(e); break; }
+    }
+  }
+  return r;
+}
+
+// Entrées des zips seulement (liste « Couches ajoutées » du panneau, bouton « Retirer »).
+export function entreesDesZips(liste) {
+  const r = [];
+  for (let i = 0; i < (liste || []).length; i++) if (liste[i] && typeof liste[i] === 'object' && liste[i].cache === undefined) r.push(liste[i]);
+  return r;
+}
+
+// Ligne du panneau : « Cache ONF du 25/11/2026 : 4 forêts, 53 parcelles, 1 point de rencontre. » ; '' sans cache complet.
+export function cacheLignePanneau(liste) {
+  const e = entreesDuCache(liste);
+  if (e.length !== CACHE_ONF.couches.length) return '';
+  const compte = {};
+  for (let i = 0; i < e.length; i++) compte[e[i].couche] = e[i].objets;
+  return `Cache ONF du ${cacheDateAffichee(e[0].date)} : ${decompte(compte)}.`;
 }
 
 function empriseFinie(e) {
@@ -1532,34 +1677,13 @@ function empriseFinie(e) {
     && Number(e.xmin) < Number(e.xmax) && Number(e.ymin) < Number(e.ymax);
 }
 
-// Emprise demandée, en EPSG:2154 { xmin, ymin, xmax, ymax } : ramenée à coteMax de côté au plus (centrée), puis
-// contrôlée contre l'emprise de vraisemblance de la France métropolitaine (vision-controles.mjs). Rend
-// { ok, emprise, plafonnee, message }.
-export function sondeEmprise(e, vraisemblance) {
-  if (!empriseFinie(e)) {
-    return { ok: false, emprise: null, plafonnee: false, message: 'Sonde : emprise de la carte illisible ou vide : rien n\'est demandé.' };
-  }
-  const c = SONDE_ONF.coteMax;
-  let r = { xmin: Number(e.xmin), ymin: Number(e.ymin), xmax: Number(e.xmax), ymax: Number(e.ymax) };
-  let plafonnee = false;
-  if (r.xmax - r.xmin > c) { const cx = (r.xmin + r.xmax) / 2; r.xmin = cx - c / 2; r.xmax = cx + c / 2; plafonnee = true; }
-  if (r.ymax - r.ymin > c) { const cy = (r.ymin + r.ymax) / 2; r.ymin = cy - c / 2; r.ymax = cy + c / 2; plafonnee = true; }
-  const v = vraisemblance;
-  if (v && (r.xmin < v.xmin || r.xmax > v.xmax || r.ymin < v.ymin || r.ymax > v.ymax)) {
-    return { ok: false, emprise: null, plafonnee: plafonnee,
-      message: 'Sonde : emprise hors de France métropolitaine en Lambert 93 (EPSG:2154) : rien n\'est demandé.' };
-  }
-  return { ok: true, emprise: r, plafonnee: plafonnee,
-    message: plafonnee ? `Sonde : zone ramenée à ${c / 1000} km de côté au plus (plafond), centrée sur la carte.` : '' };
-}
-
-// Boîte englobante de points { x, y } (coins d'une carte tournée ou reprojetée) ; null si vide ou non fini.
-export function sondeEmpriseDesPoints(points) {
+// Boîte englobante de points { x, y } en EPSG:2154 (les quatre coins de l'écran : carte tournée) ; null si vide ou non fini.
+export function cacheEmpriseDesPoints(points) {
   if (!points || points.length === 0) return null;
   const r = { xmin: Infinity, ymin: Infinity, xmax: -Infinity, ymax: -Infinity };
   for (let i = 0; i < points.length; i++) {
-    const x = Number(points[i].x);
-    const y = Number(points[i].y);
+    const x = Number(points[i] && points[i].x);
+    const y = Number(points[i] && points[i].y);
     if (!isFinite(x) || !isFinite(y)) return null;
     if (x < r.xmin) r.xmin = x;
     if (x > r.xmax) r.xmax = x;
@@ -1569,30 +1693,28 @@ export function sondeEmpriseDesPoints(points) {
   return r;
 }
 
-function coucheSonde(couche) {
-  if (SONDE_ONF.couches.indexOf(couche) < 0) throw new Error('sonde : couche inconnue ' + couche);
-  return couche;
+// Emprise demandée, en EPSG:2154 (x est, y nord) : refusée (jamais rognée, arbitrage n° 5 : « refus et demande de zoomer »)
+// si plus de 20 km de côté ; refusée si illisible ou hors de l'emprise de vraisemblance de la France métropolitaine.
+// Rend { ok, emprise, refus: '' | 'illisible' | 'trop-grande' | 'hors-france', message }.
+export function cacheJugerEmprise(e, vraisemblance) {
+  if (!empriseFinie(e)) return { ok: false, emprise: null, refus: 'illisible', message: TEXTES_CACHE_ONF_PROPOSES.horsFrance };
+  const r = { xmin: Number(e.xmin), ymin: Number(e.ymin), xmax: Number(e.xmax), ymax: Number(e.ymax) };
+  if (r.xmax - r.xmin > CACHE_ONF.coteMax || r.ymax - r.ymin > CACHE_ONF.coteMax) {
+    return { ok: false, emprise: null, refus: 'trop-grande', message: TEXTES_CACHE_ONF.zoneTropGrande };
+  }
+  const v = vraisemblance;
+  if (!v || r.xmin < v.xmin || r.xmax > v.xmax || r.ymin < v.ymin || r.ymax > v.ymax) {
+    return { ok: false, emprise: null, refus: 'hors-france', message: TEXTES_CACHE_ONF_PROPOSES.horsFrance };
+  }
+  return { ok: true, emprise: r, refus: '', message: '' };
 }
 
-// GetFeature WFS 1.0.0 : BBOX « xmin,ymin,xmax,ymax » dans le système de la couche (EPSG:2154, x est puis y nord,
-// pas d'inversion d'axes en 1.0.0), arrondie vers l'extérieur au mètre ; MAXFEATURES = plafond + 1 (plafond dépassé
-// = plafond + 1 objets reçus). Sortie GML 2 par défaut de MapServer.
-export function sondeUrlGetFeature(couche, e) {
-  coucheSonde(couche);
+// GetFeature WFS 1.0.0 (servi : mesure n° 1) : BBOX « xmin,ymin,xmax,ymax » en EPSG:2154, x puis y (pas d'inversion d'axes en
+// 1.0.0), arrondie vers l'extérieur au mètre ; MAXFEATURES = plafond + 1 (5 001 objets reçus = plafond dépassé).
+export function cacheUrlGetFeature(couche, e) {
+  if (coucheOnf(couche) === null) throw new Error('cache ONF : couche inconnue ' + couche);
   const bbox = [Math.floor(e.xmin), Math.floor(e.ymin), Math.ceil(e.xmax), Math.ceil(e.ymax)].join(',');
-  return `${SONDE_ONF.service}?SERVICE=WFS&VERSION=1.0.0&REQUEST=GetFeature&TYPENAME=${couche}&BBOX=${bbox}&MAXFEATURES=${SONDE_ONF.objetsMax + 1}`;
-}
-
-// Voie A : URI du fournisseur WFS de QGIS (paramètres : QGIS 3a92eb3 src/providers/wfs/qgswfsconstants.cpp l. 28-53).
-export function sondeUriWfs(couche) {
-  coucheSonde(couche);
-  return `url='${SONDE_ONF.service}' typename='${couche}' version='1.0.0' srsname='EPSG:2154' maxNumFeatures='${SONDE_ONF.objetsMax + 1}' pagingEnabled='false' restrictToRequestBBOX='0'`;
-}
-
-// Voie A : filtre d'emprise passé à saveVectorLayerAs, traduit en <ogc:BBOX> par QGIS (qgsogcutils.cpp l. 2531-2563).
-export function sondeExpressionEmprise(e) {
-  const p = `${e.xmin} ${e.ymin}, ${e.xmax} ${e.ymin}, ${e.xmax} ${e.ymax}, ${e.xmin} ${e.ymax}, ${e.xmin} ${e.ymin}`;
-  return `intersects_bbox($geometry, geom_from_wkt('POLYGON((${p}))'))`;
+  return `${CACHE_ONF.service}?SERVICE=WFS&VERSION=1.0.0&REQUEST=GetFeature&TYPENAME=${couche}&BBOX=${bbox}&MAXFEATURES=${CACHE_ONF.objetsMax + 1}`;
 }
 
 function compter(texte, motif) {
@@ -1600,58 +1722,255 @@ function compter(texte, motif) {
   return m ? m.length : 0;
 }
 
-// Analyse d'une réponse GetFeature reçue en texte (QfXmlHttpRequest.responseText, décodé en UTF-8) :
-// une réponse coupée arrive par onload avec un texte tronqué (qfxmlhttprequest.cpp l. 622-631) : seule la fin de
-// collection prouve qu'elle est complète ; MapServer renvoie ses exceptions en HTTP 200.
-export function sondeAnalyserReponse(texte) {
+// Analyse d'une réponse GetFeature reçue en texte (QfXmlHttpRequest.responseText, décodé en UTF-8). Une réponse coupée après
+// les en-têtes arrive par onload avec un texte tronqué (QField qfxmlhttprequest.cpp l. 622-631) : seule la fin de collection
+// prouve qu'elle est complète ; MapServer renvoie ses exceptions en HTTP 200.
+export function cacheAnalyserReponse(texte) {
   const t = String(texte === undefined || texte === null ? '' : texte);
   const decl = /^\s*<\?xml[^>]*encoding\s*=\s*["']([^"']+)["']/i.exec(t);
-  let exception = '';
-  if (/<ServiceExceptionReport\b|<ServiceException\b/.test(t)) {
-    const m = /<ServiceException\b[^>]*>([\s\S]*?)<\/ServiceException>/.exec(t);
-    exception = m && m[1].trim() !== '' ? m[1].trim() : 'exception sans message';
-  }
+  const exception = /<ServiceExceptionReport\b|<ServiceException\b/.test(t);
   const nbObjets = compter(t, /<gml:featureMember[\s>]/g);
   return {
     encodage: decl ? decl[1] : '',
-    complete: exception === '' && /<\/(?:[A-Za-z0-9_]+:)?FeatureCollection>\s*$/.test(t),
+    complete: !exception && /<\/(?:[A-Za-z0-9_]+:)?FeatureCollection>\s*$/.test(t),
     exception: exception,
     nbObjets: nbObjets,
-    plafondDepasse: nbObjets > SONDE_ONF.objetsMax,
     remplacements: compter(t, /�/g),
   };
 }
 
-// Ligne du compte rendu pour une requête : r = { statut, octets, dureeMs, erreur, analyse }.
-export function sondeLigneReponse(couche, r) {
-  const duree = (Number(r.dureeMs) / 1000).toFixed(1) + ' s';
-  if (r.erreur || !r.analyse) {
-    return `${couche} : échec (${r.erreur || 'réponse vide'}), HTTP ${r.statut}, ${duree}`;
+// Jugement d'une réponse : r = { statut, texte, erreur }. Contrôle de complétude obligatoire (fiche, étape 1 ter) : fin de
+// collection, aucune exception, nombre d'objets au plus 5 000. Statut 0 (aucune réponse : réseau absent, délai, annulation)
+// = « Pas de réseau » ; tout autre défaut de la réponse (HTTP autre que 200, exception, coupure, encodage autre que UTF-8 ou
+// caractères illisibles : accents perdus) = « Réponse incomplète ». Rend { ok, refus, nbObjets, message }.
+export function cacheJugerReponse(couche, r) {
+  const statut = Number(r && r.statut);
+  const texte = r && typeof r.texte === 'string' ? r.texte : '';
+  if (!(statut > 0)) return { ok: false, refus: 'reseau', nbObjets: 0, message: TEXTES_CACHE_ONF.pasDeReseau };
+  const incomplete = { ok: false, refus: 'incomplete', nbObjets: 0, message: TEXTES_CACHE_ONF.reponseIncomplete };
+  if (statut !== 200 || texte === '') return incomplete;
+  const a = cacheAnalyserReponse(texte);
+  if (!a.complete || a.remplacements > 0 || (a.encodage !== '' && !/^utf-?8$/i.test(a.encodage))) return incomplete;
+  if (a.nbObjets > CACHE_ONF.objetsMax) return { ok: false, refus: 'trop', nbObjets: a.nbObjets, message: messageTropDObjets(couche) };
+  return { ok: true, refus: '', nbObjets: a.nbObjets, message: '' };
+}
+
+// Élément de géométrie des objets d'une réponse de MapServer (« msGeometry » par défaut) : le premier élément dont le premier
+// enfant est une géométrie GML. Sans objet : « msGeometry ».
+export function cacheElementGeometrie(texte) {
+  const m = /<(?:[A-Za-z0-9_]+:)?([A-Za-z0-9_]+)>\s*<gml:(?:Point|MultiPoint|LineString|MultiLineString|Polygon|MultiPolygon|MultiGeometry)\b/.exec(String(texte));
+  return m ? m[1] : 'msGeometry';
+}
+
+function xmlTexte(t) {
+  return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Schéma GML de GDAL (.gfs) d'une couche : il fixe le système (EPSG:2154 ; les réponses sont lues en « système inconnu »
+// sans lui, essais n° 2 à 4 de la sonde) et le type de géométrie (MultiPolygon ou Point ; GDAL force chaque objet à ce type
+// à la lecture, ogrgmllayer.cpp l. 389 de GDAL 3.12.4), et ne déclare que les champs réels du service (ni « coordinates »
+// ni boundedBy). Lu avant tout schéma XSD distant (ogrgmldatasource.cpp l. 861-886 et 910 : aucun DescribeFeatureType).
+export function cacheGfs(couche, elementGeometrie) {
+  const c = coucheOnf(couche);
+  if (c === null) throw new Error('cache ONF : couche inconnue ' + couche);
+  const g = xmlTexte(elementGeometrie || 'msGeometry');
+  const champs = c.champs.map((f) => `    <PropertyDefn>\n      <Name>${f}</Name>\n      <ElementPath>${f}</ElementPath>\n      <Type>String</Type>\n    </PropertyDefn>\n`).join('');
+  return '<GMLFeatureClassList>\n  <GMLFeatureClass>\n'
+    + `    <Name>${c.couche}</Name>\n    <ElementPath>${c.couche}</ElementPath>\n`
+    + `    <GeometryName>${g}</GeometryName>\n    <GeometryElementPath>${g}</GeometryElementPath>\n`
+    + `    <GeometryType>${c.wkb}</GeometryType>\n    <SRSName>${CACHE_ONF.systeme}</SRSName>\n`
+    + champs + '  </GMLFeatureClass>\n</GMLFeatureClassList>\n';
+}
+
+// Source OGR du GML reçu : le .gfs est écrit APRÈS le GML, à côté et sous le même nom ; GDAL le lit alors de lui-même, avant
+// tout schéma XSD distant, s'il n'est pas plus ancien que le GML (ogrgmldatasource.cpp l. 861-886 de GDAL 3.12.4). L'option
+// GFS_TEMPLATE n'est PAS employée : elle fait rechercher dans le GML les couches présentes (PrescanForTemplate, l. 849-857),
+// et une réponse sans objet ne s'ouvre plus (essai GDAL 3.8.4, tests/cache-onf-053.test.mjs). Option d'ouverture passée par
+// « |option: » (QGIS 3a92eb3, qgsogrprovidermetadata.cpp l. 228-270, qgsogrprovider.cpp l. 206-210) : EXPOSE_GML_ID=NO
+// (sans elle, gml_id est ajouté à toute réponse WFS, ogrgmldatasource.cpp l. 520 et 567-571).
+export function cacheSourceGml(chemins, couche) {
+  return chemins.gml + '|layername=' + couche + '|option:EXPOSE_GML_ID=NO';
+}
+
+// Comptage complet par itérateur (au plus objetsMax + 1). -1 si illisible.
+export function compterObjets(couche, creerIterateur) {
+  let it = null;
+  let n = 0;
+  try {
+    it = creerIterateur(couche);
+    if (!it) throw new Error('itérateur absent');
+    while (n <= CACHE_ONF.objetsMax && it.hasNext()) { it.next(); n++; }
+  } catch (e) {
+    n = -1;
   }
-  const a = r.analyse;
-  let l = `${couche} : HTTP ${r.statut}, ${r.octets} octets, ${duree}, ${a.nbObjets} objets, ${a.complete ? 'complète' : 'INCOMPLÈTE'}, encodage ${a.encodage || 'non déclaré'}`;
-  if (a.exception) l += `, exception : ${a.exception}`;
-  if (a.plafondDepasse) l += `, PLAFOND DÉPASSÉ (plus de ${SONDE_ONF.objetsMax} objets)`;
-  if (a.remplacements > 0) l += `, ${a.remplacements} caractères illisibles`;
-  return l;
+  if (it) { try { it.close(); } catch (e) { /* sans effet */ } }
+  return n;
 }
 
-// Type de géométrie lisible : geometryType() (Qgis::GeometryType : 0 point, 1 ligne, 2 polygone, 3 inconnue,
-// 4 sans géométrie) et wkbType() (Qgis::WkbType), tous deux Q_INVOKABLE (QGIS 3a92eb3, qgsvectorlayer.h l. 1003, 1006).
-const SONDE_GEOMETRIES = ['point', 'ligne', 'polygone', 'inconnue', 'sans géométrie'];
-const SONDE_WKB = { 0: 'Unknown', 1: 'Point', 2: 'LineString', 3: 'Polygon', 4: 'MultiPoint', 5: 'MultiLineString', 6: 'MultiPolygon', 7: 'GeometryCollection', 100: 'NoGeometry' };
-export function sondeTypeGeometrie(geometrie, wkb) {
-  const g = Number(geometrie);
-  const w = Number(wkb);
-  if (!isFinite(g) || !isFinite(w)) return 'illisible';
-  const nomG = g >= 0 && g < SONDE_GEOMETRIES.length ? SONDE_GEOMETRIES[g] : 'type ' + g;
-  return nomG + ', WKB ' + w + (Object.prototype.hasOwnProperty.call(SONDE_WKB, w) ? ' ' + SONDE_WKB[w] : '');
+// Préparation d'un cache : projet Vision, dossier du projet, emprise. ctx = { visionId, dossierProjet, emprise, vraisemblance,
+// maintenant }. Rend { ok, message, emprise, horodatage, date }.
+export function cachePreparer(ctx) {
+  const refus = (m) => ({ ok: false, message: m, emprise: null, horodatage: '', date: null });
+  if (!ctx || !estUuid(ctx.visionId) || cacheDossier(ctx.dossierProjet) === '') return refus(TEXTES_CACHE_ONF_PROPOSES.echecLocal);
+  const j = cacheJugerEmprise(ctx.emprise, ctx.vraisemblance);
+  if (!j.ok) return refus(j.message);
+  const date = typeof ctx.maintenant === 'function' ? ctx.maintenant() : new Date();
+  return { ok: true, message: '', emprise: j.emprise, horodatage: cacheHorodatage(date), date: date };
 }
 
-// Nom du compte rendu, horodaté en UTC (AAAAMMJJTHHMMSSZ) : chaque sonde garde le sien.
-export function sondeNomRapport(date) {
-  const d = date instanceof Date ? date : new Date();
-  const deux = (n) => (n < 10 ? '0' : '') + n;
-  return 'rapport-' + d.getUTCFullYear() + deux(d.getUTCMonth() + 1) + deux(d.getUTCDate())
-    + 'T' + deux(d.getUTCHours()) + deux(d.getUTCMinutes()) + deux(d.getUTCSeconds()) + 'Z.txt';
+// Efface les fichiers d'une génération (toutes les couches), sous la garde peutToucherCache. Ne lève jamais.
+function effacerGeneration(ctx, horodatage) {
+  try {
+    const dossierImports = dossierCopies(ctx.dossierProjet);
+    for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+      const p = cacheChemins(ctx.dossierProjet, horodatage, CACHE_ONF.couches[i].couche);
+      if (p === null) continue;
+      const base = p.gpkg.substring(0, p.gpkg.length - '.gpkg'.length);
+      for (let k = 0; k < SUFFIXES_CACHE.length; k++) {
+        const chemin = base + SUFFIXES_CACHE[k];
+        if (!peutToucherCache(chemin, dossierImports)) continue;
+        try { if (typeof ctx.existe === 'function' && !ctx.existe(chemin)) continue; } catch (e) { continue; }
+        try { ctx.effacerFichier(chemin); } catch (e) { /* fichier resté : sans effet sur le cache affiché */ }
+      }
+    }
+  } catch (e) { /* jamais d'exception */ }
+}
+
+function effacerFichierCache(ctx, chemin) {
+  try { if (peutToucherCache(chemin, dossierCopies(ctx.dossierProjet))) ctx.effacerFichier(chemin); } catch (e) { /* sans effet */ }
+}
+
+function systemeDe(couche) {
+  try { return String(couche.crs.authid || ''); } catch (e) { return ''; }
+}
+
+function wkbDe(couche) {
+  try { return Number(couche.wkbType()); } catch (e) { return NaN; }
+}
+
+// Contrôle d'une couche ouverte (GML reçu ou GeoPackage relu) : valide, EPSG:2154, type fixé, nombre d'objets attendu,
+// emprise dans la France métropolitaine (s'il y a des objets). Rend '' si bonne, sinon la raison (journal du dev, jamais affichée).
+function controlerCoucheCache(ctx, couche, c, attendus) {
+  if (!couche || couche.isValid !== true) return 'illisible';
+  if (systemeDe(couche) !== CACHE_ONF.systeme) return 'système ' + (systemeDe(couche) || 'inconnu');
+  if (wkbDe(couche) !== c.wkb) return 'type de géométrie ' + wkbDe(couche);
+  const n = compterObjets(couche, ctx.creerIterateur);
+  if (n !== attendus) return n + ' objets lus, ' + attendus + ' attendus';
+  if (n > 0) {
+    let e = null;
+    try { e = lireEmprise(couche); } catch (x) { e = null; }
+    const v = ctx.vraisemblance;
+    if (!empriseFinie(e) || !v || e.xmin < v.xmin || e.xmax > v.xmax || e.ymin < v.ymin || e.ymax > v.ymax) return 'emprise hors de France';
+  }
+  return '';
+}
+
+// Une couche : GML et .gfs écrits, GML ouvert et contrôlé, GeoPackage écrit, style écrit à côté, GeoPackage relu et contrôlé.
+// Rend { ok, couche (la copie relue), raison }.
+function enregistrerCouche(ctx, c, reponse, horodatage) {
+  const p = cacheChemins(ctx.dossierProjet, horodatage, c.couche);
+  const dossierImports = dossierCopies(ctx.dossierProjet);
+  const echec = (raison) => ({ ok: false, couche: null, raison: c.couche + ' : ' + raison });
+  if (p === null) return echec('chemins');
+  for (const k of ['gml', 'gfs', 'gpkg', 'qml']) if (!peutToucherCache(p[k], dossierImports)) return echec('chemin refusé ' + p[k]);
+  const style = ctx.styles && typeof ctx.styles[c.couche] === 'string' ? ctx.styles[c.couche] : '';
+  if (style === '') return echec('style absent');
+  let ecrit = false;
+  try { ecrit = ctx.ecrireFichier(p.gml, reponse.texte) === true && ctx.ecrireFichier(p.gfs, cacheGfs(c.couche, cacheElementGeometrie(reponse.texte))) === true; } catch (e) { ecrit = false; }
+  if (!ecrit) return echec('écriture du GML ou du .gfs');
+  // Couches de travail : jamais libérées. Qt 6.10.3 cache deleteLater à QML et destroy() refuse une couche en CppOwnership
+  // (cache-zone-qfield.md § 10) : elles restent en mémoire jusqu'à la fermeture de QField (fuite bornée, 3 couches par cache).
+  let g = null;
+  try { g = ctx.ouvrirCouche(cacheSourceGml(p, c.couche), c.couche); } catch (e) { g = null; }
+  if (!g || g.isValid !== true) return echec('GML illisible');
+  // Système imposé (QgsMapLayer::crs, Q_PROPERTY en écriture, QGIS 3a92eb3 qgsmaplayer.h l. 90) : le .gfs le donne déjà ;
+  // seul un système absent est complété, un autre système connu est refusé par le contrôle.
+  if (systemeDe(g) === '') { try { ctx.imposerSysteme(g); } catch (e) { /* refusé au contrôle */ } }
+  const r1 = controlerCoucheCache(ctx, g, c, reponse.nbObjets);
+  if (r1 !== '') return echec('GML : ' + r1);
+  let rendu = '';
+  try { rendu = String(ctx.reecrireCouche(g, p.gpkg) || ''); } catch (e) { rendu = ''; }
+  if (rendu !== p.gpkg) return echec('GeoPackage non écrit (' + rendu + ')');
+  try { ecrit = ctx.ecrireFichier(p.qml, style) === true; } catch (e) { ecrit = false; }
+  if (!ecrit) return echec('style non écrit');
+  let copie = null;
+  try { copie = ctx.ouvrirCouche(p.gpkg + '|layername=' + c.couche, c.nom); } catch (e) { copie = null; }
+  const r2 = controlerCoucheCache(ctx, copie, c, reponse.nbObjets);
+  if (r2 !== '') return echec('GeoPackage : ' + r2);
+  return { ok: true, couche: copie, raison: '' };
+}
+
+// Enregistrement du cache, une fois les trois réponses reçues et jugées bonnes (tout ou rien, arbitrage n° 7) :
+// ctx = { visionId, dossierProjet, reglages, horodatage, date, emprise, reponses: { <couche>: { texte, nbObjets } }, styles,
+//   vraisemblance, ecrireFichier, effacerFichier, existe, ouvrirCouche(uri, nom), creerIterateur, imposerSysteme(couche),
+//   reecrireCouche(couche, cible), retirerCacheDeLaCarte(), ajouterCache(couche, nomCouche) }.
+// Les trois couches sont écrites dans une NOUVELLE génération et contrôlées ; seulement si les trois passent : l'ancien cache
+// quitte la carte, le nouveau y entre (en tête de liste, lecture seule), le registre est remplacé, l'ancienne génération est
+// effacée. Sinon la nouvelle génération est effacée, l'ancien cache reste affiché et inscrit. Rend { ok, message, compte, raison }.
+export function cacheEnregistrer(ctx) {
+  const echec = (raison) => ({ ok: false, message: TEXTES_CACHE_ONF_PROPOSES.echecLocal, compte: null, raison: raison });
+  if (!ctx || !estUuid(ctx.visionId) || cacheDossier(ctx.dossierProjet) === '' || !MOTIF_HORODATAGE.test(String(ctx.horodatage))) return echec('contexte');
+  for (const s of ['ecrireFichier', 'effacerFichier', 'ouvrirCouche', 'creerIterateur', 'imposerSysteme', 'reecrireCouche', 'retirerCacheDeLaCarte', 'ajouterCache']) {
+    if (typeof ctx[s] !== 'function') return echec('service absent : ' + s);
+  }
+  const anciennes = entreesDuCache(lireRegistre(ctx.reglages, ctx.visionId));
+  const copies = [];
+  const compte = {};
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    const c = CACHE_ONF.couches[i];
+    const rep = ctx.reponses ? ctx.reponses[c.couche] : null;
+    if (!rep || typeof rep.texte !== 'string' || typeof rep.nbObjets !== 'number') { effacerGeneration(ctx, ctx.horodatage); return echec(c.couche + ' : réponse absente'); }
+    const r = enregistrerCouche(ctx, c, rep, ctx.horodatage);
+    if (!r.ok) { effacerGeneration(ctx, ctx.horodatage); return echec(r.raison); }
+    copies.push({ c: c, couche: r.couche });
+    compte[c.couche] = rep.nbObjets;
+  }
+  // Les trois passent : remplacement.
+  try { ctx.retirerCacheDeLaCarte(); } catch (e) { /* l'ajout suit */ }
+  for (let i = 0; i < copies.length; i++) {
+    try { copies[i].couche.readOnly = true; } catch (e) { /* lecture seule : propriété de QgsVectorLayer */ }
+    try { ctx.ajouterCache(copies[i].couche, copies[i].c.couche); } catch (e) { /* le registre fait foi à la réouverture */ }
+  }
+  const date = ctx.date instanceof Date ? ctx.date : new Date();
+  const garde = [];
+  const liste = lireRegistre(ctx.reglages, ctx.visionId);
+  for (let i = 0; i < liste.length; i++) if (!(liste[i] && typeof liste[i] === 'object' && liste[i].cache === CACHE_ONF.sorte)) garde.push(liste[i]);
+  for (let i = 0; i < copies.length; i++) {
+    const c = copies[i].c;
+    garde.push({ cache: CACHE_ONF.sorte, couche: c.couche, chemin: ctx.horodatage + '/' + c.couche + '.gpkg',
+      emprise: ctx.emprise, date: date.toISOString(), objets: compte[c.couche] });
+  }
+  ecrireRegistre(ctx.reglages, ctx.visionId, garde);
+  // Fichiers de travail de la nouvelle génération, puis l'ancienne génération (jamais celle qu'on vient d'écrire).
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    const p = cacheChemins(ctx.dossierProjet, ctx.horodatage, CACHE_ONF.couches[i].couche);
+    if (p !== null) { effacerFichierCache(ctx, p.gml); effacerFichierCache(ctx, p.gfs); }
+  }
+  const vues = {};
+  for (let i = 0; i < anciennes.length; i++) {
+    const h = anciennes[i].chemin.split('/')[0];
+    if (h !== ctx.horodatage && !vues[h]) { vues[h] = true; effacerGeneration(ctx, h); }
+  }
+  return { ok: true, message: messageCacheReussi(compte, date), compte: compte, raison: '' };
+}
+
+// Réouverture du projet : couches du cache rechargées depuis le disque (sans réseau), marquées par ctx.chargerCache(source,
+// nomAffiche, couche) (Vision.qml), en lecture seule ; son .qml voisin est appliqué par QGIS au chargement (ADR 0008).
+// Sans ctx.chargerCache : rien n'est chargé. Rend { rechargees, manquantes } (noms des couches du service).
+function rechargerCacheOnf(ctx, dossier, entrees, liberer) {
+  const bilan = { rechargees: [], manquantes: [] };
+  if (typeof ctx.chargerCache !== 'function' || entrees.length === 0) return bilan;
+  for (let i = 0; i < entrees.length; i++) {
+    const e = entrees[i];
+    const c = coucheOnf(e.couche);
+    const chemin = dossier + '/' + CACHE_ONF.dossier + '/' + e.chemin;
+    let present = false;
+    try { present = !!ctx.existe(chemin); } catch (x) { present = false; }
+    if (!present) { bilan.manquantes.push(e.couche); continue; }
+    const r = chargerSansPlanter(function (s, n) { return ctx.chargerCache(s, n, e.couche); }, chemin + '|layername=' + e.couche, c.nom, undefined, liberer);
+    if (!r.couche) { bilan.manquantes.push(e.couche); continue; }
+    try { r.couche.readOnly = true; } catch (x) { /* propriété de QgsVectorLayer */ }
+    bilan.rechargees.push(e.couche);
+  }
+  return bilan;
 }

@@ -401,3 +401,91 @@ Bouton « massif de la Serre » (compte rendu transmis par l'orchestrateur) :
   sans décision.
 - Sinon : ne rien libérer. Les couches ouvertes restent en mémoire (et leurs fichiers ouverts) jusqu'à la fermeture
   de QField ; pour une sonde ou un import ponctuel, c'est une fuite bornée.
+
+## 11. Prototype du cache de zone dans le plugin (étape 1 ter) et protocole d'essai sur le Samsung
+
+Rédigé par le `dev` le 25 novembre 2026. **La sonde est retirée du plugin** (Vision.qml, Panneau.qml, vision-logique.mjs et son
+test) : §§ 8 à 10 en gardent l'historique. Le prototype suit la voie B (§ 1.3) et la forme R2 corrigée (§ 4).
+
+**Ce que fait le bouton « Mettre en cache les couches ONF de cette zone »** (`plugin/Vision.qml`, section « cache ONF » ; logique
+pure `plugin/vision-logique.mjs`, section « cache ONF », testée par `tests/cache-onf-053.test.mjs`) :
+
+1. Emprise : les quatre coins de l'écran (`mapSettings.screenToCoordinate`, `qgsquickmapsettings.h` l. 236), reprojetés en
+   EPSG:2154 si la carte ne l'est pas ; la boîte qui les contient (carte tournée comprise). Plus de 20 km de côté : refus
+   (« Zone trop grande… »), jamais rognée.
+2. Pour `FOR_PUBL_FR`, `PARC_PUBL_FR` puis `PRS_FR` : `GetFeature` WFS 1.0.0, `BBOX`, `MAXFEATURES=5001`. Chaque réponse est
+   jugée : statut 0 (pas de réponse) = « Pas de réseau… » ; HTTP autre que 200, exception, fin de collection absente,
+   encodage autre que UTF-8 ou caractère illisible = « Réponse incomplète… » ; 5 001 objets = « Trop d'objets… (plus de 5 000
+   <couche>) ». Au premier refus, rien n'est écrit : l'ancien cache reste.
+3. Les trois réponses reçues : écrites dans une **nouvelle génération** `vision-imports/_cache-onf/<AAAAMMJJTHHMMSSZ>/` :
+   `<couche>.gml`, puis un schéma `<couche>.gfs` écrit par Vision, qui **fixe le système (EPSG:2154) et le type de géométrie**
+   (MultiPolygon pour forêts et parcelles, Point pour les points ; GDAL force chaque objet à ce type, `ogrgmllayer.cpp` l. 389 de
+   GDAL 3.12.4) et ne déclare que les champs réels (ni `gml_id` : option `EXPOSE_GML_ID=NO`, ni `coordinates`). GDAL lit ce
+   `.gfs` avant tout schéma XSD distant (`ogrgmldatasource.cpp` l. 861-886, 910) : plus de « système inconnu », plus de
+   DescribeFeatureType au moment de l'ouverture. Puis contrôles (valide, EPSG:2154, type, nombre d'objets = nombre reçu,
+   emprise en France métropolitaine), `saveVectorLayerAs` en `<couche>.gpkg`, style adapté `<couche>.qml` écrit à côté,
+   GeoPackage relu et recontrôlé. Le système est aussi imposé (`couche.crs`, Q_PROPERTY en écriture, `qgsmaplayer.h` l. 90) si
+   GDAL n'en donnait pas.
+4. **Tout ou rien** : seulement si les trois couches passent, l'ancien cache quitte la carte, le nouveau y entre (forêts, puis
+   parcelles, puis points : les points en tête de liste), en lecture seule, sous les noms validés ; le registre est remplacé ;
+   le GML, le `.gfs` et l'ancienne génération sont effacés. Sinon la nouvelle génération est effacée et l'ancien cache reste
+   affiché et inscrit.
+5. Le panneau affiche « Cache ONF du JJ/MM/AAAA : … » ; à la réouverture du projet (sans réseau), les trois GeoPackage sont
+   rechargés depuis le disque, après les couches des zips (donc en tête de liste), et leur `.qml` s'applique (ADR 0008).
+
+**Lu dans le code, non essayé sur l'appareil** : `screenToCoordinate` depuis un plugin ; l'option `|option:EXPOSE_GML_ID=NO`
+dans une source OGR de QGIS ; la lecture du `.gfs` voisin par le GDAL du paquet Android (3.12.4 ; essayée avec GDAL 3.8.4
+dans la session, réponse vide comprise) ; le rendu des styles adaptés sur les GeoPackage du cache ; les flèches
+`arrows/Arrow_01.svg` dans QField Android. Point qui dépend de QField 4.3.8 : aucun repéré (sources lues : 4.3.7).
+
+**Limites connues** : couches de travail (GML ouverts) jamais libérées (§ 10) ; dossiers de génération vides laissés sur
+l'appareil (aucune fonction d'effacement de dossier exposée) ; pas de bouton d'annulation (texte non validé) ; écran figé le
+temps de l'écriture (quelques secondes, après les téléchargements) ; une version plus ancienne du plugin retirerait les
+entrées du cache du registre (« douteuses »), sans effacer les fichiers (prix de R2, § 4).
+
+**Mise en ligne** (Pascal, une fois la branche poussée par l'orchestrateur) :
+`gh workflow run release-plugin.yml --repo pobsteta/vision --ref claude/awesome-dirac-sbuica` (préversion `plugin-essai`,
+jamais « latest » ; adresse `https://github.com/pobsteta/vision/releases/download/plugin-essai/plugin-vision.zip`). Installer
+par « Install plugin from URL », ouvrir `vision.qgz`.
+
+**Protocole court (Samsung, une forêt de JFC : massif de la Serre, Jura, autour de x 895 717, y 6 679 283 en EPSG:2154 ; avec réseau, mode avion, réouverture, zone trop grande, coupure réseau, second cache)** :
+
+| N° | Geste | Attendu | Si autre chose |
+|---|---|---|---|
+| 1 | Avec réseau, carte zoomée sur la forêt (moins de 20 km de côté), bouton Vision, « Mettre en cache les couches ONF de cette zone » | « Téléchargement des couches ONF… », puis « Couches ONF en cache : n forêts, n parcelles, n points de rencontre (zone du JJ/MM/AAAA). » ; trois couches en tête de liste, aux styles de Pascal (contour cyan et étiquette `iidtn_frt` au-delà du 1:50 000 ; parcelles orange, étiquette `ccod_prf` en deçà ; carré rouge et flèches des points) ; ligne « Cache ONF du … » dans le panneau | noter le message et faire une capture ; flèches absentes : le signaler |
+| 2 | Toucher une parcelle et un point de rencontre | formulaire lisible, accents justes ; contour d'une forêt connue sur le fond IGN à moins de 5 m | capture |
+| 3 | **Mode avion**, fermer puis rouvrir `vision.qgz` (**réouverture**) | les trois couches reviennent, mêmes styles, même ligne « Cache ONF du … » | message affiché à l'ouverture |
+| 4 | Toujours en mode avion, bouton du cache | « Pas de réseau : le cache ONF n'est pas mis à jour, l'ancien est gardé. » ; l'ancien cache reste affiché | capture |
+| 5 | Avec réseau, dézoomer au-delà de 20 km de côté, bouton du cache | « Zone trop grande (plus de 20 km de côté) : zoomez, puis recommencez. » ; rien ne change | capture |
+| 6 | **Coupure** : avec réseau, bouton du cache, puis mode avion aussitôt pendant « Téléchargement des couches ONF… » | « Pas de réseau… » ou « Réponse incomplète du service ONF… » ; l'ancien cache reste affiché | capture ; si « Couches ONF en cache » s'affiche, noter les nombres |
+| 7 | **Second cache** : avec réseau, déplacer la carte sur une autre forêt proche, bouton du cache | nouveau message de réussite ; l'ancienne zone disparaît de la carte, la nouvelle s'affiche ; la ligne du panneau change | capture |
+
+À rapporter : les captures des étapes 1 à 7, la version de QField, et la durée approximative de l'étape 1.
+
+## 12. Attribution « © ONF » (ajout validé par Pascal le 25 novembre 2026) : impossible depuis le plugin
+
+QField affiche les crédits d'une couche à partir de `layer->metadata().rights()` (`QF src/core/qflayertreemodel.cpp`
+l. 1118-1138). Aucune voie lue ne permet au plugin d'y écrire « © ONF » :
+
+- `metadata` est une `Q_PROPERTY` de `QgsMapLayer` (`QG src/core/qgsmaplayer.h` l. 89), mais `QgsLayerMetadata` est un
+  `Q_GADGET` dont `rights` est en **lecture seule** (`QG src/core/metadata/qgslayermetadata.h` l. 57-60), sans méthode
+  invocable : QML ne peut ni le modifier ni en fabriquer un ;
+- `setAttribution` et `serverProperties()` ne sont ni `Q_INVOKABLE` ni propriétés (`qgsmaplayer.h` l. 414-445) ;
+- un `.qmd` voisin n'est pas lu au chargement (`loadDefaultMetadata` n'est appelé par aucun code du cœur lu ; `qgsmaplayer.cpp`
+  l. 1517-1521) ; le fournisseur OGR ne lit les métadonnées d'un GeoPackage que dans sa table `gpkg_metadata`
+  (`QG src/core/providers/ogr/qgsogrprovider.cpp` l. 1206-1260), que `saveVectorLayerAs` n'écrit pas (`QF qflayerutils.cpp`
+  l. 675-733 : aucune option de métadonnées) ;
+- un style `.qml` ne porte pas de métadonnées (`importNamedMetadata` est un chemin distinct, `qgsmaplayer.cpp` l. 1700-1724).
+
+Options, à trancher : (a) l'attribution `<rights>© ONF</rights>` sur les couches WFS de `vision.qgz` à l'étape 2 (comme les
+fonds, `outils/projet-modele.mjs` l. 106-111), et pour le cache la voie C4 (§ 1.4 : couches GeoPackage déclarées dans
+`vision.qgz`, qui portent leurs métadonnées) ; (b) un texte « © ONF » dans le panneau, à côté de la ligne « Cache ONF du … »
+(texte à valider) ; (c) « © ONF » dans le nom des couches (noms validés à changer).
+
+## 13. À écrire à l'étape 2 (spec § 3.3 ou nouveau § 3.6, README), non fait ici
+
+- Spec : le cache de zone (bouton, plafonds, contrôles, tout ou rien, `vision-imports/_cache-onf/<horodatage>/`, entrées du
+  registre `cache: "onf"`, rechargement, noms des couches, textes validés et ceux qui restent à valider) ; le refus d'un zip
+  nommé `_cache-onf.zip` ; l'attribution (§ 12).
+- README § 3 : le bouton du cache, ce qu'il faut de réseau, ce qui revient en mode avion, la ligne du panneau ; la version
+  du plugin (« Le plugin 0.x.0 (sur `main`) », vérifiée par `tests/readme.test.mjs`).
