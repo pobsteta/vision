@@ -178,7 +178,7 @@ function sectionSonde() {
 test('sonde (QML) : appels lus dans QField v4.3.7, sans registre ni import', () => {
   const s = sectionSonde();
   for (const appel of ['iface.createHttpRequest()', 'iface.mapCanvas()', 'visibleExtent', 'destinationCrs', 'LayerUtils.loadVectorLayer',
-    'LayerUtils.saveVectorLayerAs', '"WFS"', 'Logique.sondeAnalyserReponse', 'Logique.sondeUrlGetFeature', 'rapport.txt', 'Controles.EMPRISE_VRAISEMBLANCE']) {
+    'LayerUtils.saveVectorLayerAs', '"WFS"', 'Logique.sondeAnalyserReponse', 'Logique.sondeUrlGetFeature', 'Logique.sondeNomRapport', 'Controles.EMPRISE_VRAISEMBLANCE']) {
     assert.ok(s.includes(appel), `appel absent : ${appel}`);
   }
   for (const interdit of ['inscrire', 'reglages', 'settings.', 'ProjectUtils.addMapLayer', 'rmFile', 'importerZip']) {
@@ -193,4 +193,48 @@ test('sonde (panneau) : boutons de la sonde, dit « outil d\'essai », textes no
   assert.match(p, /sonderReseau\("carte"\)/);
   assert.match(p, /sonderReseau\("serre"\)/);
   assert.match(p, /sonderHorsReseau\(\)/);
+});
+
+// ---------------------------------------------------------------------------------------------- aller-retour 2/3
+test('sonde : type de géométrie lisible (geometryType et wkbType, qgsvectorlayer.h l. 1003 et 1006)', () => {
+  assert.equal(L.sondeTypeGeometrie(2, 6), 'polygone, WKB 6 MultiPolygon');
+  assert.equal(L.sondeTypeGeometrie(0, 1), 'point, WKB 1 Point');
+  assert.equal(L.sondeTypeGeometrie(3, 0), 'inconnue, WKB 0 Unknown');
+  assert.equal(L.sondeTypeGeometrie(4, 100), 'sans géométrie, WKB 100 NoGeometry');
+  assert.equal(L.sondeTypeGeometrie(2, 1006), 'polygone, WKB 1006');
+  assert.equal(L.sondeTypeGeometrie(undefined, undefined), 'illisible');
+});
+
+test('sonde : horodatage du compte rendu (rapport-AAAAMMJJTHHMMSSZ.txt, UTC), sans écraser le précédent', () => {
+  assert.equal(L.sondeNomRapport(new Date(Date.UTC(2026, 10, 25, 9, 5, 7))), 'rapport-20261125T090507Z.txt');
+});
+
+test('sonde (QML) : fichier d\'essai sous le nom « fixture », géométrie mesurée, fin garantie, échec d\'écriture dit', () => {
+  const s = sectionSonde();
+  assert.ok(s.includes('sondeOuvrirGml(dossier, chemin, "fixture", "llib_frt", Logique.SONDE_FIXTURE_ATTENDU)'), 'fixture nommée « fixture »');
+  for (const appel of ['geometryType()', 'wkbType()', 'Logique.sondeTypeGeometrie', 'Logique.sondeNomRapport', 'finally', 'écriture du GML reçu ÉCHOUÉE']) {
+    assert.ok(s.includes(appel), `absent : ${appel}`);
+  }
+  assert.ok(!s.includes('"/rapport.txt"'), 'rapport.txt ne doit plus être écrasé');
+});
+
+test('garde : la sonde ne part pas en version stable (présente seulement avec VERSION 0.6.0, à retirer avant main)', () => {
+  const q = lire('Vision.qml');
+  if (q.includes('==== sonde 053 : début')) {
+    assert.equal(L.VERSION, '0.6.0', 'sonde 053 présente : retirer la section avant toute montée de version');
+    assert.match(q, /==== sonde 053 : début[^\n]*\n\s*\/\/ À RETIRER AVANT TOUTE FUSION VERS MAIN/);
+  }
+});
+
+test('pièce § 9 : le tableau de lecture reprend les textes de la sonde', () => {
+  const doc = readFileSync(join(ici, '..', 'docs', 'referentiels', 'cache-zone-qfield.md'), 'utf8');
+  const s9 = doc.slice(doc.indexOf('## 9.'));
+  const qml = lire('Vision.qml') + readFileSync(join(PLUGIN, 'vision-logique.mjs'), 'utf8');
+  assert.match(s9, /rapport-<horodatage>\.txt/);
+  // Chaque fragment entre « ` » de la colonne de lecture doit exister tel quel dans le code de la sonde.
+  for (const f of ['GML ouvert, valide,', 'accents JUSTES', 'objets relus', 'ouverture du GML ÉCHOUÉE', 'REFUSÉE', 'ÉCART avec le GML',
+    'complète', 'INCOMPLÈTE', 'exception : ', 'caractères illisibles', 'écriture du GML reçu ÉCHOUÉE', 'voie A, couche WFS invalide', 'type de géométrie']) {
+    assert.ok(s9.includes(f), `§ 9 ne cite pas : ${f}`);
+    assert.ok(qml.includes(f), `la sonde n'affiche pas : ${f}`);
+  }
 });

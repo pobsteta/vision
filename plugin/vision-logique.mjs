@@ -1635,3 +1635,23 @@ export function sondeLigneReponse(couche, r) {
   if (a.remplacements > 0) l += `, ${a.remplacements} caractères illisibles`;
   return l;
 }
+
+// Type de géométrie lisible : geometryType() (Qgis::GeometryType : 0 point, 1 ligne, 2 polygone, 3 inconnue,
+// 4 sans géométrie) et wkbType() (Qgis::WkbType), tous deux Q_INVOKABLE (QGIS 3a92eb3, qgsvectorlayer.h l. 1003, 1006).
+const SONDE_GEOMETRIES = ['point', 'ligne', 'polygone', 'inconnue', 'sans géométrie'];
+const SONDE_WKB = { 0: 'Unknown', 1: 'Point', 2: 'LineString', 3: 'Polygon', 4: 'MultiPoint', 5: 'MultiLineString', 6: 'MultiPolygon', 7: 'GeometryCollection', 100: 'NoGeometry' };
+export function sondeTypeGeometrie(geometrie, wkb) {
+  const g = Number(geometrie);
+  const w = Number(wkb);
+  if (!isFinite(g) || !isFinite(w)) return 'illisible';
+  const nomG = g >= 0 && g < SONDE_GEOMETRIES.length ? SONDE_GEOMETRIES[g] : 'type ' + g;
+  return nomG + ', WKB ' + w + (Object.prototype.hasOwnProperty.call(SONDE_WKB, w) ? ' ' + SONDE_WKB[w] : '');
+}
+
+// Nom du compte rendu, horodaté en UTC (AAAAMMJJTHHMMSSZ) : chaque sonde garde le sien.
+export function sondeNomRapport(date) {
+  const d = date instanceof Date ? date : new Date();
+  const deux = (n) => (n < 10 ? '0' : '') + n;
+  return 'rapport-' + d.getUTCFullYear() + deux(d.getUTCMonth() + 1) + deux(d.getUTCDate())
+    + 'T' + deux(d.getUTCHours()) + deux(d.getUTCMinutes()) + deux(d.getUTCSeconds()) + 'Z.txt';
+}

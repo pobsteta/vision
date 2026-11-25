@@ -76,6 +76,10 @@ ou `""` (l. 675-733). C'est la fonction des imports (ADR 0008, prouvée sur le S
 - Type de géométrie : la mesure n° 1 a lu `Geometry` (type quelconque) pour les trois couches
   (`docs/referentiels/brut/onf/mesure-2026-11-25.md`). Le GeoPackage écrit prendrait ce type (`layer->wkbType()`,
   l. 712) : le rendu du style de Pascal sur une couche de type quelconque **n'est pas prouvé**.
+- Cache du fournisseur : la voie A écrit le cache de téléchargement du fournisseur WFS **hors du dossier du projet**,
+  dans `<dossier des réglages de QGIS>/cache/WFSprovider` (ou le réglage `cache/directory`) :
+  `QG src/providers/wfs/qgscachedirectorymanager.cpp` l. 65-67. Fichiers temporaires que Vision ne gère pas (ni
+  registre, ni effacement) ; la voie B n'en écrit pas.
 - Lecture du GML : le fournisseur WFS de QGIS lit les réponses avec **son propre analyseur**
   (`QgsGmlStreamingParser`, `QG src/providers/wfs/qgswfsfeaturedownloaderimpl.cpp` l. 615), fondé sur Expat, dont le
   port qgis dépend directement (`QF vcpkg/ports/qgis/vcpkg.json` l. 14 : `"expat"`). La voie A ne dépend donc pas du
@@ -323,7 +327,7 @@ carte, rien d'effacé ; fichiers dans `vision-imports/_sonde-053/`.
    écrit `<couche>.gml`, l'ouvre et le réécrit comme en 1.
 3. Si le GML reçu ne s'ouvre pas : voie A (couche WFS de QGIS, `saveVectorLayerAs` filtré), objets et durée.
 4. Bouton hors réseau : rouvre `fixture.gml` et les GML déjà reçus, sans réseau.
-5. Compte rendu dans le panneau et dans `vision-imports/_sonde-053/rapport.txt`.
+5. Compte rendu dans le panneau et dans `vision-imports/_sonde-053/rapport-<horodatage>.txt` (un par sonde ; fichier d'essai nommé « fixture » dans le compte rendu ; type de géométrie affiché pour chaque couche lue ; toute exception notée, la sonde se termine toujours).
 
 Le dossier `_sonde-053` serait celui d'un zip `_sonde-053.zip` : collision improbable, acceptée pour un outil
 d'essai ; la garde d'import des noms réservés est prévue avec R2 (§ 4).
@@ -341,22 +345,24 @@ après `node --test` ; la version reste 0.6.0 (une fusion par erreur sur `main` 
 
 1. **Installer** : QField, Paramètres, Plugins, « Install plugin from URL », l'adresse ci-dessus ; ouvrir `vision.qgz`.
 2. **Avec réseau** (wifi ou 4G), bouton Vision, « Sonde ONF : massif de la Serre (réseau) ». Attendre « Fin de la
-   sonde ». Noter ou photographier le compte rendu ; il est aussi dans `vision-imports/_sonde-053/rapport.txt`.
+   sonde. ». Noter ou photographier le compte rendu ; il est aussi écrit dans
+   `vision-imports/_sonde-053/rapport-<horodatage>.txt` (un fichier par sonde, heure UTC : rien n'est écrasé ; la
+   ligne « Compte rendu : … » en donne le nom).
 3. Zoomer la carte sur une forêt connue de JFC (zone de moins de 20 km), puis « Sonde ONF : emprise de la carte
    (réseau) ».
 4. **Mode avion**, « Sonde ONF : hors réseau (fichiers reçus) » : le fichier d'essai et les GML reçus se rouvrent-ils ?
-5. Rapporter les trois comptes rendus (ou les `rapport.txt` successifs : le dernier écrase le précédent, copier entre
-   deux essais si possible).
+5. Rapporter les trois comptes rendus (les trois fichiers `rapport-<horodatage>.txt`).
 
-**Ce que le compte rendu doit dire, ligne par ligne :**
+**Ce que le compte rendu doit dire, ligne par ligne** (textes de la sonde, tels qu'affichés) :
 
 | Ligne | Si bon | Si mauvais : ce que ça veut dire |
 |---|---|---|
-| `fixture : GML ouvert, valide, 2 objets, système EPSG:2154` puis `accents JUSTES (2/2)` | le pilote GML est dans le paquet : voie B possible | `ouverture du GML ÉCHOUÉE` : pilote absent, voie B tombe, la voie A est essayée sur le réseau |
-| `GeoPackage … : 2 objets relus` | `saveVectorLayerAs` passe malgré `gml_id` | `REFUSÉE` ou `ÉCART` : défaut `gml_id` NOT NULL à traiter |
-| `FOR_PUBL_FR : HTTP 200, … objets, complète, encodage UTF-8` (idem pour les deux autres couches) | requête http, contenu complet | `échec (…)` : réseau ; `INCOMPLÈTE` : coupure ; `exception` : refus du serveur ; `encodage ISO-8859-1` ou `caractères illisibles` : accents perdus en voie B |
-| `voie A …` (seulement si le GML reçu ne s'ouvre pas) | objets écrits, durée | `couche WFS invalide` ou `REFUSÉE` |
-| hors réseau : mêmes ouvertures qu'avec réseau | lecture sans réseau | — |
+| `fixture : GML ouvert, valide, 2 objets, système EPSG:2154, type de géométrie polygone, WKB 6 MultiPolygon, champs : …` puis `fixture : accents JUSTES (2/2)` | le pilote GML est dans le paquet : voie B possible | `fixture : ouverture du GML ÉCHOUÉE (pilote GML absent, ou fichier illisible)` : voie B tombe ; la voie A est essayée sur le réseau |
+| `fixture : GeoPackage … : 2 objets relus, type de géométrie …` | `saveVectorLayerAs` passe malgré `gml_id` | `réécriture en GeoPackage REFUSÉE` ou `(ÉCART avec le GML)` : défaut `gml_id` NOT NULL à traiter |
+| `FOR_PUBL_FR : HTTP 200, … octets, … s, … objets, complète, encodage UTF-8` (idem `PARC_PUBL_FR`, `PRS_FR`), puis `FOR_PUBL_FR : GML ouvert, valide, …, type de géométrie …` | requête http, contenu complet, type lu | `FOR_PUBL_FR : échec (…)` : réseau ; `INCOMPLÈTE` : coupure ; `exception : …` : refus du serveur ; `encodage ISO-8859-1` ou `caractères illisibles` : accents perdus en voie B ; `écriture du GML reçu ÉCHOUÉE` : écriture refusée dans le projet ; `aucun objet sur cette emprise` : rien sur la zone |
+| `FOR_PUBL_FR : voie A, …` (seulement si le GML reçu ne s'ouvre pas) | `voie A, couche WFS valide, type de géométrie …` puis objets écrits et durée | `voie A, couche WFS invalide` ou `voie A, écriture REFUSÉE` |
+| `EXCEPTION (…) : …` | absente | la sonde s'est arrêtée là ; le compte rendu est quand même écrit |
+| hors réseau : mêmes lignes `GML ouvert, valide,` qu'avec réseau | lecture sans réseau | — |
 
 Ce que la sonde **ne** prouve **pas** : le rendu des styles, le rechargement à la réouverture du projet, la tenue au
 plafond sur une vraie grosse zone (prototype de cache, après la sonde).
