@@ -9,6 +9,8 @@
   - QGIS embarqué : commit `3a92eb30c83d7d52751a330628d72b8eb9e64876` (`vcpkg/ports/qgis/portfile.cmake` l. 1 de QField) ;
   - GDAL : port vcpkg 3.12.4 du dépôt vcpkg au commit `99e82d9c9f0b281ec11fba48cc8434574a2b6e66`
     (`CMakeLists.txt` l. 5 de QField : `VCPKG_TAG`), fichiers `ports/gdal/vcpkg.json` et `portfile.cmake`.
+- **Révision :** aller-retour 1/3 après relecture de `0272d30` (pilote GML requalifié en inconnu, réponse tronquée,
+  délai de 60 s, R2 corrigée, `gml_id`) ; § 8 : la sonde d'essai qui mesure sur le Samsung ce qui reste inconnu.
 - **Limite :** tout ce qui suit est **lu**, rien n'est **essayé**. Le service ONF (http seulement) est injoignable
   depuis la session cloud ; aucun appel n'a tourné sur le Samsung. « Prouvé » veut dire ici « écrit dans le code
   de la version embarquée », pas « vu marcher ».
@@ -62,8 +64,10 @@ ou `""` (l. 675-733). C'est la fonction des imports (ADR 0008, prouvée sur le S
 
 - L'itération se fait **dans le fil principal** : le téléchargement tourne dans un autre fil, le fil principal attend
   par tranches de 50 ms avec `processEvents` (`qgsbackgroundcachedfeatureiterator.cpp` l. 491, l. 600-635), sans
-  délai maximal par défaut. **L'écran de QField reste figé pendant tout le téléchargement**, sans bouton
-  d'annulation possible depuis QML.
+  délai propre à la requête d'objets (`mRequest.timeout()`, l. 603-604). Les requêtes passent par le gestionnaire
+  réseau de QGIS, qui coupe une réponse **sans octet reçu pendant 60 s** (réglage `network-timeout`, défaut 60 000 ms :
+  `QG src/core/network/qgsnetworkaccessmanager.cpp` l. 52 ; minuterie relancée à chaque octet reçu, l. 493-503).
+  **L'écran de QField reste figé pendant tout le téléchargement**, sans bouton d'annulation possible depuis QML.
 - Une coupure réseau en cours de route **termine l'itération sans erreur visible depuis QML** : `saveVectorLayerAs`
   rend quand même le chemin (l. 726-733 : aucun contrôle après la boucle). Un cache **incomplet** ne se distingue pas
   d'une zone pauvre en forêts.
@@ -72,6 +76,10 @@ ou `""` (l. 675-733). C'est la fonction des imports (ADR 0008, prouvée sur le S
 - Type de géométrie : la mesure n° 1 a lu `Geometry` (type quelconque) pour les trois couches
   (`docs/referentiels/brut/onf/mesure-2026-11-25.md`). Le GeoPackage écrit prendrait ce type (`layer->wkbType()`,
   l. 712) : le rendu du style de Pascal sur une couche de type quelconque **n'est pas prouvé**.
+- Lecture du GML : le fournisseur WFS de QGIS lit les réponses avec **son propre analyseur**
+  (`QgsGmlStreamingParser`, `QG src/providers/wfs/qgswfsfeaturedownloaderimpl.cpp` l. 615), fondé sur Expat, dont le
+  port qgis dépend directement (`QF vcpkg/ports/qgis/vcpkg.json` l. 14 : `"expat"`). La voie A ne dépend donc pas du
+  pilote GML de GDAL : c'est son intérêt si ce pilote manque (§ 1.3).
 
 ### 1.3 Voie B — requête `GetFeature&BBOX=…` par le plugin, réponse GML 2 écrite puis réécrite en GeoPackage
 
@@ -82,14 +90,20 @@ l. 229-230, `.cpp` l. 84-95), qui imite `XMLHttpRequest` : `open`, `send`, `abor
 - `http` est **accepté** (seuls les schémas autres que http et https sont refusés : `qfxmlhttprequest.cpp` l. 279-286).
 - La requête passe par `QgsNetworkAccessManager::instance()` (l. 320), donc par les réglages réseau de QField.
 - Délai réglable (`timeout`, `.h` l. 95-99 ; `.cpp` l. 527-540) et annulation (`abort`, `.h` l. 202) : l'écran
-  **ne se fige pas** pendant le téléchargement, l'agent peut annuler.
+  **ne se fige pas** pendant le téléchargement, l'agent peut annuler. Ce `timeout` ne prolonge pas le délai
+  d'inactivité de 60 s du gestionnaire réseau de QGIS (`qgsnetworkaccessmanager.cpp` l. 52, l. 493-503) : un serveur
+  muet 60 s coupe la réponse, quel que soit `timeout`. MapServer écrit le GML au fil de l'eau ; un long calcul avant le
+  premier octet (grosse emprise) peut suffire à couper.
 - La réponse n'existe qu'**en texte** : `mResponseText = QString::fromUtf8( responseBytes )` (`.cpp` l. 585),
   `response` = ce texte hors JSON (l. 604-614). Conséquences : SHAPE (zip binaire) est **exclu** ; le GML 2 passe
   **à condition d'être en UTF-8** (un GML en ISO-8859-1 aurait ses accents détruits, sans retour possible).
   L'encodage du GetFeature de l'ONF **n'est pas mesuré** (le GetCapabilities déclare `UTF-8`, l. 1 du fichier versé).
-- On sait si la réponse est **complète** : code http (`status`), erreur réseau (`onerror`), et contenu (fin
-  `</wfs:FeatureCollection>`, absence de `ServiceExceptionReport`, que MapServer renvoie en HTTP 200 : journal du
-  25 novembre, aller-retour 1/3).
+- **Le contrôle du contenu est obligatoire**, le code http ne suffit pas. Une réponse coupée **après** les en-têtes
+  (coupure réseau, délai de 60 s) a déjà un `status` (200) : `finalizeReply` appelle alors **`onload`** avec le texte
+  tronqué, pas `onerror` (`qfxmlhttprequest.cpp` l. 622-631 : `onerror` seulement si `status == 0`) ; l'erreur
+  d'annulation elle-même est ignorée (l. 513-515). La réponse n'est tenue pour complète que si elle finit par
+  `</wfs:FeatureCollection>` et ne contient pas de `ServiceExceptionReport` (que MapServer renvoie en HTTP 200 :
+  journal du 25 novembre, aller-retour 1/3). Fonction de la sonde : `sondeAnalyserReponse` (§ 8).
 
 **Écrire la réponse dans le projet** : `FileUtils.writeFileContent(chemin, octets)` (`QF src/core/utils/qffileutils.h`
 l. 97 ; `.cpp` l. 652-690) n'écrit que **dans le dossier du projet** (`isWithinProjectDirectory`, l. 654-658 ;
@@ -101,10 +115,24 @@ Samsung (prototype n° 3). `vision-imports/` est sous le dossier du projet (spec
 OGR GML de GDAL), contrôles existants (système, vraisemblance de l'emprise, comptage par
 `LayerUtils.createFeatureIterator`, `qflayerutils.h` l. 234), puis `saveVectorLayerAs(couche, cible, "GPKG")`, puis
 effacement du `.gml` (et du `.gfs` que GDAL écrit à côté) par `platformUtilities.rmFile` (prouvé, ADR 0007).
-Le pilote GML de GDAL a besoin d'Expat ou de Xerces : le port GDAL de QGIS est demandé **avec ses options par
-défaut** (`QF vcpkg/ports/qgis/vcpkg.json`, entrée `gdal` sans `default-features: false`), qui comprennent
-`recommended-features` → `expat` et `curl` (`ports/gdal/vcpkg.json` l. 41-69 et l. 296-313 ; `portfile.cmake` l. 34 :
-`expat → GDAL_USE_EXPAT`). **Déduit des manifestes de construction, non vérifié dans le paquet Android.**
+**Pilote GML de GDAL : INCONNU, premier essai à faire** (sonde, § 8). Il a besoin d'Expat ou de Xerces
+(`ports/gdal/portfile.cmake` l. 34 : `expat → GDAL_USE_EXPAT`). Les manifestes ne tranchent pas :
+- le manifeste de QField déclare `gdal` avec `"default-features": false` (`QF vcpkg.json` l. 32-35) ; dans vcpkg, le
+  manifeste de tête fait alors tomber les options par défaut de GDAL (dont `recommended-features` → `expat`, `curl`,
+  `sqlite3` : `ports/gdal/vcpkg.json` l. 41-69, l. 296-313), et le port qgis ne demande que `gdal[archive, poppler]`
+  (`QF vcpkg/ports/qgis/vcpkg.json`) : les manifestes prédiraient un GDAL **sans Expat** ;
+- mais ils prédiraient aussi un GDAL **sans sqlite3**, donc sans GeoPackage, alors que le GeoPackage marche sur le
+  Samsung (prototype n° 3, imports de l'ADR 0008) : la lecture des manifestes est donc incomplète (triplets, ports
+  de surcouche ou dépendances indirectes), et ne prouve ni la présence ni l'absence du pilote GML.
+Si le pilote manque, la voie B tombe et la voie A (analyseur GML propre à QGIS, § 1.2) devient la seule.
+
+**`gml_id` NOT NULL** : lu par GDAL 3.8.4 sur le fichier d'essai de la sonde (forme MapServer, sans `gml:id`), le
+pilote GML expose un champ `gml_id` ; `ogr2ogr` vers GeoPackage échoue alors sur tous les objets (« NOT NULL
+constraint failed: FOR_PUBL_FR.gml_id », essai du 25 novembre dans la session ; même défaut que la mesure, corrigé
+par `GML_EXPOSE_GML_ID=NO`, journal du 25 novembre). Par `saveVectorLayerAs`, la contrainte ne devrait **pas** être
+recopiée : `includeConstraints` vaut `false` par défaut (`QG src/core/qgsvectorfilewriter.h` l. 585) et QField ne le
+pose pas (`qflayerutils.cpp` l. 703-710), or c'est lui qui commande `OGR_Fld_SetNullable` (`qgsvectorfilewriter.cpp`
+l. 930-939). Lu, non essayé : la sonde compare le nombre d'objets du GML et du GeoPackage relu.
 
 **Requête proposée** (WFS 1.0.0, servie : mesure n° 1 ; coordonnées Lambert 93 dans l'ordre x, y, sans
 inversion d'axes en 1.0.0) :
@@ -119,7 +147,10 @@ inversion d'axes en 1.0.0) :
 - Le GML de MapServer porte un `schemaLocation` vers DescribeFeatureType : GDAL peut aller le chercher (réseau
   présent à ce moment) et en tirer un type de géométrie quelconque, comme la mesure. **Non prouvé** ; parade possible
   à essayer au temps 2 : écrire avant l'ouverture un `.gfs` qui fixe le type (`MultiPolygon`, `Point`).
-- Conversion des octets en JS (`Logique.octetsUtf8`, boucle par caractère) : durée sur quelques Mo à mesurer.
+- Conversion des octets en JS : `Logique.octetsUtf8` (`plugin/vision-logique.mjs` l. 181-195) empile chaque octet
+  dans un tableau JavaScript avant le `Uint8Array` : **pic de mémoire** de plusieurs fois la taille du texte (un
+  nombre JS par octet), en plus du texte lui-même. À quelques Mo, tolérable ; durée et mémoire mesurées par la sonde
+  (octets et durée par couche). Une écriture par morceaux sera à prévoir au prototype si le pic gêne.
 
 ### 1.4 Autres voies, non retenues
 
@@ -156,7 +187,7 @@ l'appareil (opérateur, wifi de l'ONF, proxy) laisse passer ce port 80.
   l. 72 ; `.cpp` l. 316-318), lisible en QML par `xMinimum`, `yMinimum`, `xMaximum`, `yMaximum`
   (`QG src/core/geometry/qgsrectangle.h` l. 48-53, `Q_GADGET`). C'est la lecture que fait déjà `Logique.lireEmprise`.
 - Système de cette emprise : `mapSettings.destinationCrs` (`qgsquickmapsettings.h` l. 109), lisible par `authid`
-  (déjà utilisé par `Logique.decrireSysteme`). Le projet modèle est en EPSG:2154 (`outils/projet-modele.mjs` l. 142) ;
+  (déjà utilisé par `Logique.decrireSysteme`). Le projet modèle est en EPSG:2154 (`outils/projet-modele.mjs` l. 298 `projectCrs`, l. 308 `destinationsrs`) ;
   si ce n'est pas le cas, `GeometryUtils.reprojectRectangle(rect, source, but)` (`QF src/core/utils/qfgeometryutils.h`
   l. 119) avec `CoordinateReferenceSystemUtils.fromDescription("EPSG:2154")` (`qfcoordinatereferencesystemutils.h`
   l. 36, déjà employé par le plugin).
@@ -190,30 +221,70 @@ Trois façons de l'inscrire, à trancher (le `dev` ne tranche pas) :
 | | Inscription | Ce que ça demande | Prix |
 |---|---|---|---|
 | **R1** | Pseudo-zip `ONF.zip`, entrées `{ zip: "ONF.zip", couche: "FOR_PUBL_FR", chemin: "ONF/FOR_PUBL_FR.gpkg" }` | **Aucune** ligne de rechargement nouvelle : `demarrerProjet` le recharge tel quel | Collision avec un vrai zip nommé `ONF.zip` ; messages « zip absent » / « réimporter le zip » faux pour un cache ; le retrait parle de zip |
-| **R2** (proposée) | Entrée de nouvelle sorte dans le même registre : `{ cache: "onf", couche, chemin: "onf-cache/<couche>-<horodatage>.gpkg", emprise, date, objets }`, marques `vision/cache=onf` et `vision/couche` | `entreeSaine`, `demarrerProjet`, `retirerCouche` et le panneau étendus ; messages propres au cache | Une version **plus ancienne** du plugin retirerait ces entrées du registre (« douteuses ») sans effacer les fichiers : un retour arrière perd le cache à l'affichage |
+| **R2** (retenue par l'orchestrateur, forme corrigée ci-dessous) | Entrée de nouvelle sorte dans le même registre, marques `vision/cache=onf` et `vision/couche` | `entreeSaine`, `demarrerProjet`, `inscrire`/`retirer`, `coucheDuProjet`, `cheminsProteges`, le chargeur et le panneau étendus ; messages propres au cache | Une version **plus ancienne** du plugin retirerait ces entrées du registre (« douteuses ») sans effacer les fichiers : un retour arrière perd le cache à l'affichage |
 | **R3** | Registre à part (clé `vision/<vision_id>/cache`) | Code à part, aucun risque pour le registre des zips | Deux registres à tenir ; aucun gain de rechargement |
 
-**Remplacement au cache suivant (proposé pour R2)** : écrire le nouveau GeoPackage sous un **nouveau nom**
-(horodaté), le charger, le contrôler ; seulement alors retirer de la carte l'ancienne couche marquée
-(`ProjectUtils.removeMapLayer`), effacer ses fichiers (`rmFile`, garde `peutEffacer`), et remplacer l'entrée.
-En cas d'échec (réseau coupé, réponse incomplète, plafond dépassé), l'ancien cache **reste** affiché et inscrit.
-Raison : ne pas écraser un GeoPackage encore ouvert par QGIS (risque n° 4 de `plugin/PLAN.md` § 8, de même nature).
+**Ce que la première forme de R2 cassait** (relecture de `0272d30`) :
+
+1. **Nom de table.** `saveVectorLayerAs` nomme la table d'après le fichier (`saveOptions.layerName =
+   fileInfo.completeBaseName()`, `QF qflayerutils.cpp` l. 705). Un fichier `FOR_PUBL_FR-<horodatage>.gpkg` aurait une
+   table `FOR_PUBL_FR-<horodatage>`, et le rechargement en `chemin + '|layername=' + e.couche`
+   (`plugin/vision-logique.mjs` l. 1349 ; même forme à l'import, l. 968) ne la trouverait pas ; le `.qml` voisin,
+   cherché sous le nom du fichier (`cheminsDeLaCopie`, l. 810-813), non plus.
+2. **Couche du projet.** `coucheDuProjet` (`plugin/Vision.qml` l. 192-194) ne reconnaît que `vision/zip` : une couche
+   de cache affichée serait prise pour une couche à libérer (`deleteLater` sur une couche de la carte). Les recherches
+   `coucheMarquee` (l. 72) et `retirerLeZipDeLaCarte` (l. 302) ne connaissent aussi que `vision/zip`.
+3. **Clé du registre.** `inscrire` et `retirer` comparent `(zip, couche)` (`memeCouche`, `vision-logique.mjs`
+   l. 635-637) : une entrée sans `zip` serait confondue avec toute entrée sans `zip` de même couche.
+4. **Fichiers protégés.** `cheminsProteges` (l. 982-995) protège `dossier + '/' + e.chemin` : pour une entrée de
+   cache, ce chemin doit être pris sous le dossier du cache, sinon le mauvais fichier est protégé.
+5. **Collision de dossier.** Le dossier d'un zip est son nom sans `.zip` (`dossierDuZip`, l. 805-807) : un dossier de
+   cache `onf-cache/` serait celui d'un zip `onf-cache.zip` importé par l'agent.
+
+**Forme corrigée proposée de R2** (à coder au prototype, après la sonde) :
+
+- **Dossier réservé** `vision-imports/_cache-onf/`, et **à l'import, refus d'un zip** dont le dossier serait un nom
+  réservé (`_cache-onf.zip`, `_sonde-053.zip`) : message clair, rien n'est copié.
+- **Une génération par dossier** : `vision-imports/_cache-onf/<horodatage>/<couche>.gpkg` et `<couche>.qml`. Le
+  fichier garde le nom de la couche, donc la table aussi (point 1), et `|layername=<couche>` comme le `.qml` voisin
+  marchent sans changement de la mécanique de l'ADR 0008. Horodatage sûr : `AAAAMMJJTHHMMSSZ` (chiffres, `T`, `Z`).
+- **Entrée** : `{ cache: "onf", couche: "FOR_PUBL_FR", chemin: "<horodatage>/FOR_PUBL_FR.gpkg", emprise: {xmin, ymin,
+  xmax, ymax}, date, objets }`, sans `zip`. `entreeSaine` : `cache === "onf"`, `couche` parmi les trois couches,
+  `chemin` = deux segments, horodatage conforme, fichier = `<couche>.gpkg`.
+- **Clé** `(sorte, couche)` : `memeCouche` compare `cache` en plus de `zip` (une entrée de zip n'a pas de `cache`).
+- **Marques** `vision/cache = "onf"` et `vision/couche` ; `coucheDuProjet` vrai aussi pour `vision/cache` (point 2) ;
+  recherche propre `coucheDuCache(couche)` ; `coucheMarquee` et `retirerLeZipDeLaCarte` inchangés (elles ne doivent
+  pas toucher au cache).
+- **`cheminsProteges`** : pour une entrée de cache, base `vision-imports/_cache-onf/` (point 4) ; l'effacement d'une
+  ancienne génération passe par la même garde que les copies (`peutEffacer`, dossier `vision-imports`).
+
+**Remplacement au cache suivant** (arbitrage n° 7 : une seule zone, l'ancienne gardée si la nouvelle échoue) :
+écrire les trois couches dans un **nouveau** dossier de génération ; les contrôler (complétude de chaque réponse,
+plafond non dépassé, système EPSG:2154, emprise vraisemblable, nombre d'objets du GML = nombre relu du GeoPackage) ;
+seulement si **les trois** passent : retirer de la carte les couches de l'ancienne génération, ajouter les nouvelles,
+remplacer les entrées, effacer l'ancienne génération. Sinon : la nouvelle génération est effacée, l'ancienne reste
+affichée et inscrite, le message dit pourquoi. Raison du nouveau dossier : ne pas écraser un GeoPackage encore ouvert
+par QGIS (risque n° 4 de `plugin/PLAN.md` § 8, de même nature).
 
 ## 5. Bilan : voies classées
 
 | Rang | Voie | Prouvé dans les sources | Pas prouvé | Pour l'agent |
 |---|---|---|---|---|
-| **1 (recommandée)** | **B** : `iface.createHttpRequest()` → GML 2 → `writeFileContent` dans `vision-imports/` → `loadVectorLayer` (OGR) → contrôles existants → `saveVectorLayerAs` GPKG → `rmFile` du GML | http permis (§ 2) ; requête asynchrone, délai, annulation, code http ; écriture dans le projet ; réécriture GPKG ; emprise lisible (§ 3) | pilote GML dans le paquet Android (déduit) ; GML de l'ONF en UTF-8 ; type de géométrie ; durée de conversion | écran vivant, bouton « annuler » possible ; un cache incomplet est **détecté et refusé**, l'ancien reste |
-| 2 | **A** : couche WFS (`loadVectorLayer(…, "WFS")`) + `saveVectorLayerAs(…, "GPKG", "intersects_bbox(…)")` | fournisseur WFS lié ; filtre traduit en `FILTER` OGC ; `maxNumFeatures` | traduction réelle du filtre par MapServer 7 ; type de géométrie ; rendu | écran **figé** pendant le téléchargement, sans annulation ; coupure réseau = cache **incomplet sans le savoir** |
+| **1 (recommandée, sous condition)** | **B** : `iface.createHttpRequest()` → GML 2 → `writeFileContent` dans `vision-imports/` → `loadVectorLayer` (OGR) → contrôles existants → `saveVectorLayerAs` GPKG → `rmFile` du GML | http permis (§ 2) ; requête asynchrone, délai, annulation ; écriture dans le projet ; réécriture GPKG ; emprise lisible (§ 3) ; NOT NULL de `gml_id` non recopié | **pilote GML dans le paquet Android : inconnu (condition de la voie)** ; GML de l'ONF en UTF-8 ; type de géométrie ; durée et mémoire de conversion ; coupure après 60 s de silence | écran vivant, bouton « annuler » possible ; un cache incomplet est **détecté par le contenu et refusé**, l'ancien reste |
+| 2 (seule voie si le pilote GML manque) | **A** : couche WFS (`loadVectorLayer(…, "WFS")`) + `saveVectorLayerAs(…, "GPKG", "intersects_bbox(…)")` | fournisseur WFS lié, avec son propre analyseur GML (Expat de QGIS) ; filtre traduit en `FILTER` OGC ; `maxNumFeatures` | traduction réelle du filtre par MapServer 7 ; type de géométrie ; rendu | écran **figé** pendant le téléchargement, sans annulation ; coupure réseau = cache **incomplet sans le savoir** |
 | 3 | C1, C2 | — | — | plus de code, mêmes défauts que A (C1) ou emprise impossible (C2) |
 
 La voie B demande un peu plus de code que A, mais c'est la seule où le plugin **sait** qu'il a tout reçu. Test du
 roseau et du chêne : si l'on plie vers A (moins de code), c'est l'agent qui paie sur le terrain (un cache partiel,
-une parcelle manquante en mode avion, sans message). Je ne plie pas en silence : B est proposée, A reste en repli si
-le pilote GML manque dans le paquet Android.
+une parcelle manquante en mode avion, sans message). Je ne plie pas en silence : B est proposée **si le pilote GML est
+présent** (premier essai de la sonde). S'il manque, A devient la seule voie et son prix (cache incomplet sans le savoir,
+écran figé) devra être écrit à Pascal avec une parade à prouver (par exemple compter les objets par une requête
+`RESULTTYPE=hits` en WFS 1.1.0 avant d'écrire, comme la mesure de l'étape 1).
 
-## 6. Ce que le temps 2 devra mesurer sur le Samsung (si l'orchestrateur le lance)
+## 6. Ce que le temps 2 devra mesurer sur le Samsung
 
+0. **D'abord** : un petit `.gml` écrit par le plugin s'ouvre-t-il par `loadVectorLayer` ? (pilote GML, condition de la
+   voie B ; sonde, § 8).
 1. Une requête `GetFeature&BBOX` en http sur une forêt connue : code 200, encodage déclaré du GML, taille, durée.
 2. Ouverture du GML par `loadVectorLayer` (pilote GML présent ?), système lu (`EPSG:2154`), type de géométrie,
    nombre d'objets = nombre de `<gml:featureMember>`.
@@ -224,15 +295,35 @@ le pilote GML manque dans le paquet Android.
 
 ## 7. Questions à Pascal
 
-1. **Plafond** (à trancher) : proposition d'un côté maximal de zone (par exemple 10 km × 10 km, ou 20 km × 20 km)
-   **et** d'un nombre maximal d'objets par couche (par exemple 5 000), au-delà desquels le plugin refuse et demande
-   de zoomer. Repères de la mesure n° 1 : 17 190 forêts, 408 400 parcelles, 24 343 points sur la métropole ; débit
-   observé du serveur ≈ 26 forêts/s et ≈ 190 parcelles/s (GitHub Actions, à revoir sur mobile).
-2. **Textes affichés** (à valider avant le prototype) : libellé du bouton, message de réussite (nombre d'objets
-   par couche, date), de refus (plafond, réseau absent, réponse incomplète), de rechargement hors réseau, et
-   l'affichage de la date du cache.
-3. **Rangement** : un plugin ne peut pas mettre le cache dans le groupe « ONF » (§ 4). Acceptez-vous, pour le
-   prototype, des couches de cache **en tête de la liste** ? Pour l'étape 2 : cache rangé par le projet modèle
-   (voie C4, à prouver) ou en tête.
-4. **Inscription** : R2 (nouvelle sorte d'entrée, proposée), R1 ou R3 (§ 4).
-5. **Une seule zone** à la fois (le cache suivant remplace le précédent, comme dit la fiche) : confirmé ?
+Tranchées le 25 novembre 2026 (fiche 053, arbitrages n° 5 à 7) : **plafond 20 km de côté et 5 000 objets par
+couche** ; **cache en tête de liste** ; **une seule zone à la fois**, l'ancienne gardée si la nouvelle échoue.
+Inscription : R2, forme corrigée (§ 4). Repères de la mesure n° 1 : 17 190 forêts, 408 400 parcelles, 24 343 points
+sur la métropole ; débit observé ≈ 26 forêts/s et ≈ 190 parcelles/s (GitHub Actions, à revoir sur mobile).
+
+Reste ouvert : **les textes affichés** du futur bouton de cache (libellé, réussite avec nombre d'objets et date, refus
+pour plafond, réseau absent ou réponse incomplète, rechargement hors réseau), à soumettre à Pascal après la sonde. Les
+textes de la sonde sont provisoires (outil d'essai).
+
+## 8. Sonde d'essai (temps 2, premier pas)
+
+**Zone d'essai** : massif de la Serre (Jura), cas `Serre_EA2026` de JFC. Point de référence WGS84 lon 5,585° E,
+lat 47,185° N, soit **x 895 717, y 6 679 283 en EPSG:2154** (pyproj 3.8.0, ordre x est, y nord ; vérifié par
+`tests/sonde-onf-053.test.mjs`). Emprise par défaut : carré de 4 km centré sur ce point
+(893 717, 6 677 283 – 897 717, 6 681 283). La carte peut aussi décider (emprise visible, plafonnée à 20 km).
+
+**Ce que fait la sonde** (plugin d'essai : Vision 0.6.0 + section « sonde 053 », `plugin/Vision.qml` et
+`plugin/Panneau.qml` ; logique pure `plugin/vision-logique.mjs`, section « sonde 053 ») : rien au registre, rien à la
+carte, rien d'effacé ; fichiers dans `vision-imports/_sonde-053/`.
+
+1. Écrit `fixture.gml` (GML 2 de forme MapServer, 2 forêts fictives, accents, EPSG:2154), l'ouvre par
+   `loadVectorLayer`, affiche validité, objets, système, champs, libellés et « accents JUSTES/FAUX », puis le réécrit
+   en GeoPackage horodaté et compte les objets relus (`gml_id`).
+2. Pour chaque couche, `GetFeature` WFS 1.0.0 `BBOX` (`MAXFEATURES=5001`) par `iface.createHttpRequest()` :
+   statut, octets, durée, `Content-Length`, objets, complète ou non, exception, encodage déclaré, caractères illisibles ;
+   écrit `<couche>.gml`, l'ouvre et le réécrit comme en 1.
+3. Si le GML reçu ne s'ouvre pas : voie A (couche WFS de QGIS, `saveVectorLayerAs` filtré), objets et durée.
+4. Bouton hors réseau : rouvre `fixture.gml` et les GML déjà reçus, sans réseau.
+5. Compte rendu dans le panneau et dans `vision-imports/_sonde-053/rapport.txt`.
+
+Le dossier `_sonde-053` serait celui d'un zip `_sonde-053.zip` : collision improbable, acceptée pour un outil
+d'essai ; la garde d'import des noms réservés est prévue avec R2 (§ 4).
