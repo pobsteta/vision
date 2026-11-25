@@ -140,6 +140,16 @@ relu sans réseau. Le prototype est le **cache de zone dans le plugin**, publié
 Attribution des trois couches : « © ONF » (validée par Pascal le 25 novembre 2026 ; accord de l'ONF rapporté par
 Pascal, trace écrite à verser).
 
+**Arbitrages de Pascal sur le prototype (25 novembre 2026)** :
+- textes ajoutés validés : « Enregistrement du cache ONF impossible : le cache n'est pas mis à jour, l'ancien est
+  gardé. » ; « Carte hors de France métropolitaine : le cache ONF n'est pas mis à jour, l'ancien est gardé. » ;
+  « Cache ONF illisible : il n'est pas affiché ; remettez-le en cache avec réseau. » ; « _cache-onf.zip : nom
+  réservé par Vision (cache ONF), rien n'est importé. » ;
+- attribution du cache **dans le nom des couches** (le plugin ne peut pas poser `rights`) : « Forêts publiques
+  (© ONF) », « Parcelles forestières (© ONF) », « Points de rencontre des secours (© ONF) » ;
+- **mêmes seuils** que l'arbitrage n° 2 pour les couches du cache (parcelles et points en deçà du 1:50 000) ;
+- plugin d'essai en **0.7.0** dès maintenant (README et tests adaptés sans affaiblissement).
+
 « Trop d'objets » nomme la couche en cause (parcelles, forêts ou points de rencontre). Tout autre texte est soumis à
 Pascal avant d'être écrit.
 
