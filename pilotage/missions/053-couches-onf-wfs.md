@@ -148,6 +148,8 @@ Pascal, trace écrite à verser).
 - attribution du cache **dans le nom des couches** (le plugin ne peut pas poser `rights`) : « Forêts publiques
   (© ONF) », « Parcelles forestières (© ONF) », « Points de rencontre des secours (© ONF) » ;
 - **mêmes seuils** que l'arbitrage n° 2 pour les couches du cache (parcelles et points en deçà du 1:50 000) ;
+- texte ajouté pour une emprise illisible : « Position de la carte illisible : le cache ONF n'est pas mis à jour,
+  l'ancien est gardé. » (« Carte hors de France métropolitaine … » reste pour une carte hors de France) ;
 - plugin d'essai en **0.7.0** dès maintenant (README et tests adaptés sans affaiblissement).
 
 « Trop d'objets » nomme la couche en cause (parcelles, forêts ou points de rencontre). Tout autre texte est soumis à
