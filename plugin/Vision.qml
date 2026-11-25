@@ -565,15 +565,55 @@ Item {
   }
 
   // Bouton « Mettre en cache les couches ONF de cette zone ».
+  // Diagnostic de tout échec du cache (aller-retour 2/3, essai n° 1 sur le Samsung) : écrit dans
+  // vision-imports/_cache-onf/dernier-echec.txt (écrasé à chaque échec) et dans le journal de QField (console.log).
+  // d = { etape, couche, raison, exception, message, contexte, details } (Logique.cacheTexteDiagnostic). Ne lève jamais ;
+  // le texte affiché reste celui de la logique (textes validés).
+  function cacheDiagnostic(d) {
+    try {
+      const x = d || {};
+      x.date = new Date();
+      x.vision = versionPlugin;
+      x.qfield = versionQField();
+      const texte = Logique.cacheTexteDiagnostic(x);
+      console.log(texte);
+      const chemin = Logique.cacheCheminDiagnostic(dossierProjet());
+      if (chemin !== "" && !ecrireFichier(chemin, texte)) console.log("Vision, cache ONF : diagnostic non écrit dans " + chemin);
+    } catch (e) {
+      try { console.log("Vision, cache ONF : diagnostic impossible : " + e); } catch (x2) { /* rien */ }
+    }
+  }
+
+  function contexteCache(prep) {
+    return {
+      visionId: visionId(), dossierProjet: dossierProjet(),
+      horodatage: prep ? prep.horodatage : "", emprise: prep ? prep.emprise : null,
+      depart: prep ? { visionId: prep.visionId, dossierProjet: prep.dossierProjet } : null
+    };
+  }
+
   function mettreEnCacheOnf() {
     if (cacheEnCours) return;
-    let emprise = null;
-    try { emprise = empriseCarteCache(); } catch (e) { emprise = null; }
-    const prep = Logique.cachePreparer({
-      visionId: visionId(), dossierProjet: dossierProjet(), emprise: emprise,
-      vraisemblance: Controles.EMPRISE_VRAISEMBLANCE, maintenant: function () { return new Date(); }
-    });
-    if (!prep.ok) { message(prep.message); return; }
+    let prep = null;
+    try {
+      let emprise = null;
+      let erreurEmprise = "";
+      try { emprise = empriseCarteCache(); } catch (e) { emprise = null; erreurEmprise = Logique.texteException(e); }
+      prep = Logique.cachePreparer({
+        visionId: visionId(), dossierProjet: dossierProjet(), emprise: emprise,
+        vraisemblance: Controles.EMPRISE_VRAISEMBLANCE, maintenant: function () { return new Date(); }
+      });
+      if (!prep.ok) {
+        cacheDiagnostic({ etape: "préparation", message: prep.message, exception: erreurEmprise,
+          contexte: { visionId: visionId(), dossierProjet: dossierProjet(), emprise: emprise } });
+        message(prep.message);
+        return;
+      }
+    } catch (e) {
+      cacheDiagnostic({ etape: "préparation (exception)", message: Logique.TEXTES_CACHE_ONF.echecLocal, exception: Logique.texteException(e), contexte: contexteCache(prep) });
+      message(Logique.TEXTES_CACHE_ONF.echecLocal);
+      return;
+    }
     cacheEnCours = true;
     message(textePendantCache);
     cacheRequete(0, prep, {});
@@ -588,8 +628,15 @@ Item {
   // Une couche, puis la suivante ; toute exception termine proprement (cacheEnCours revient à faux, rien n'est inscrit).
   function cacheRequete(i, prep, reponses) {
     const couches = Logique.CACHE_ONF.couches;
+    let etape = "requête " + (i + 1);
     try {
-      if (i >= couches.length) { cacheFin(cacheEnregistrer(prep, reponses).message); return; }
+      if (i >= couches.length) {
+        etape = "enregistrement";
+        const r = cacheEnregistrer(prep, reponses);
+        if (!r.ok) cacheDiagnostic({ etape: r.etape, raison: r.raison, message: r.message, contexte: contexteCache(prep), details: r.details });
+        cacheFin(r.message);
+        return;
+      }
       const couche = couches[i].couche;
       const url = Logique.cacheUrlGetFeature(couche, prep.emprise);
       let fini = false;
@@ -597,7 +644,7 @@ Item {
       const suite = function (statut, texte, erreur) {
         if (fini) return;
         fini = true;
-        Qt.callLater(function () { cacheReponse(i, prep, reponses, couche, { statut: statut, texte: texte, erreur: erreur }); });
+        Qt.callLater(function () { cacheReponse(i, prep, reponses, couche, { statut: statut, texte: texte, erreur: erreur, url: url }); });
       };
       req.timeout = 120000;
       req.onload = function () { suite(Number(req.status), String(req.responseText || ""), ""); };
@@ -607,6 +654,8 @@ Item {
       req.open("GET", url);
       req.send();
     } catch (e) {
+      cacheDiagnostic({ etape: etape + " (exception)", couche: i < couches.length ? couches[i].couche : "", message: Logique.TEXTES_CACHE_ONF.echecLocal,
+        exception: Logique.texteException(e), contexte: contexteCache(prep) });
       cacheFin(Logique.TEXTES_CACHE_ONF.echecLocal);
     }
   }
@@ -614,9 +663,17 @@ Item {
   function cacheReponse(i, prep, reponses, couche, r) {
     try {
       const j = Logique.cacheJugerReponse(couche, r);
-      if (!j.ok) { cacheFin(j.message); return; }
+      if (!j.ok) {
+        cacheDiagnostic({ etape: "réponse jugée : " + j.refus, couche: couche, message: j.message, contexte: contexteCache(prep),
+          details: { url: r.url, statut: r.statut, erreur: r.erreur, nbObjets: j.nbObjets, longueur: String(r.texte || "").length,
+            analyse: Logique.cacheAnalyserReponse(r.texte), extrait: Logique.extraitReponse(r.texte, 300) } });
+        cacheFin(j.message);
+        return;
+      }
       reponses[couche] = { texte: r.texte, nbObjets: j.nbObjets };
     } catch (e) {
+      cacheDiagnostic({ etape: "réponse (exception)", couche: couche, message: Logique.TEXTES_CACHE_ONF.echecLocal,
+        exception: Logique.texteException(e), contexte: contexteCache(prep) });
       cacheFin(Logique.TEXTES_CACHE_ONF.echecLocal);
       return;
     }

@@ -1784,7 +1784,7 @@ export function cacheGfs(couche, elementGeometrie) {
 // tout schéma XSD distant, s'il n'est pas plus ancien que le GML (ogrgmldatasource.cpp l. 861-886 de GDAL 3.12.4). L'option
 // GFS_TEMPLATE n'est PAS employée : elle fait rechercher dans le GML les couches présentes (PrescanForTemplate, l. 849-857),
 // et une réponse sans objet ne s'ouvre plus (essai GDAL 3.8.4, tests/cache-onf-053.test.mjs). Option d'ouverture passée par
-// « |option: » (QGIS 3a92eb3, qgsogrprovidermetadata.cpp l. 228-270 ; qgsogrprovider.cpp l. 434, analyzeURI, puis l. 206-210)
+// « |option: » (QGIS 3a92eb3, qgsogrprovidermetadata.cpp l. 228-270 ; qgsogrprovider.cpp l. 434, analyzeURI, puis open() l. 4392-4523 : écriture tentée, puis lecture seule)
 // : EXPOSE_GML_ID=NO
 // (sans elle, gml_id est ajouté à toute réponse WFS, ogrgmldatasource.cpp l. 520 et 567-571).
 export function cacheSourceGml(chemins, couche) {
@@ -1847,6 +1847,20 @@ function wkbDe(couche) {
   try { return Number(couche.wkbType()); } catch (e) { return NaN; }
 }
 
+// Description d'une couche pour le diagnostic : chaque lecture protégée.
+export function decrireCoucheCache(ctx, couche) {
+  const d = { valide: false, systeme: '', description: '', wkb: NaN, objets: -1, emprise: null, champs: [] };
+  if (!couche) return d;
+  try { d.valide = couche.isValid; } catch (e) { d.valide = 'erreur'; }
+  d.systeme = systemeDe(couche);
+  try { d.description = String(couche.crs.description || ''); } catch (e) { d.description = ''; }
+  d.wkb = wkbDe(couche);
+  try { d.objets = compterObjets(couche, ctx.creerIterateur); } catch (e) { d.objets = -1; }
+  try { d.emprise = lireEmprise(couche); } catch (e) { d.emprise = null; }
+  try { d.champs = [].concat(couche.fields.names); } catch (e) { d.champs = []; }
+  return d;
+}
+
 // Contrôle d'une couche ouverte (GML reçu ou GeoPackage relu) : valide, EPSG:2154, type fixé, nombre d'objets attendu,
 // emprise dans la France métropolitaine (s'il y a des objets). Rend '' si bonne, sinon la raison (journal du dev, jamais affichée).
 function controlerCoucheCache(ctx, couche, c, attendus) {
@@ -1869,31 +1883,50 @@ function controlerCoucheCache(ctx, couche, c, attendus) {
 function enregistrerCouche(ctx, c, reponse, horodatage) {
   const p = cacheChemins(ctx.dossierProjet, horodatage, c.couche);
   const dossierImports = dossierCopies(ctx.dossierProjet);
-  const echec = (raison) => ({ ok: false, couche: null, raison: c.couche + ' : ' + raison });
+  // Diagnostic (aller-retour 2/3) : étape, couche en cause décrite, chemins, présence des fichiers ; jamais affiché.
+  let etape = 'chemins';
+  let enCause = null;
+  let rendu = '';
+  const present = (chemin) => { try { return typeof ctx.existe === 'function' ? !!ctx.existe(chemin) : 'inconnu'; } catch (e) { return 'erreur'; } };
+  const echec = (raison) => ({ ok: false, couche: null, raison: c.couche + ' : ' + raison, etape: etape, details: {
+    couche: c.couche, chemins: p, rendu: rendu, nbObjetsRecus: reponse.nbObjets,
+    gmlPresent: p ? present(p.gml) : '', gfsPresent: p ? present(p.gfs) : '', gpkgPresent: p ? present(p.gpkg) : '',
+    qmlPresent: p ? present(p.qml) : '', source: p ? cacheSourceGml(p, c.couche) : '',
+    coucheEnCause: enCause === null ? null : decrireCoucheCache(ctx, enCause) } });
   if (p === null) return echec('chemins');
   for (const k of ['gml', 'gfs', 'gpkg', 'qml']) if (!peutToucherCache(p[k], dossierImports)) return echec('chemin refusé ' + p[k]);
+  etape = 'style';
   const style = ctx.styles && typeof ctx.styles[c.couche] === 'string' ? ctx.styles[c.couche] : '';
   if (style === '') return echec('style absent');
+  etape = 'écriture du GML et du .gfs';
   let ecrit = false;
-  try { ecrit = ctx.ecrireFichier(p.gml, reponse.texte) === true && ctx.ecrireFichier(p.gfs, cacheGfs(c.couche, cacheElementGeometrie(reponse.texte))) === true; } catch (e) { ecrit = false; }
-  if (!ecrit) return echec('écriture du GML ou du .gfs');
+  try { ecrit = ctx.ecrireFichier(p.gml, reponse.texte) === true; } catch (e) { ecrit = false; }
+  if (!ecrit) return echec('écriture du GML refusée');
+  try { ecrit = ctx.ecrireFichier(p.gfs, cacheGfs(c.couche, cacheElementGeometrie(reponse.texte))) === true; } catch (e) { ecrit = false; }
+  if (!ecrit) return echec('écriture du .gfs refusée');
+  etape = 'ouverture du GML';
   // Couches de travail : jamais libérées. Qt 6.10.3 cache deleteLater à QML et destroy() refuse une couche en CppOwnership
   // (cache-zone-qfield.md § 10) : elles restent en mémoire jusqu'à la fermeture de QField (fuite bornée, 3 couches par cache).
   let g = null;
   try { g = ctx.ouvrirCouche(cacheSourceGml(p, c.couche), c.couche); } catch (e) { g = null; }
+  enCause = g;
   if (!g || g.isValid !== true) return echec('GML illisible');
+  etape = 'contrôle du GML';
   // Système imposé (QgsMapLayer::crs, Q_PROPERTY en écriture, QGIS 3a92eb3 qgsmaplayer.h l. 90) : le .gfs le donne déjà ;
   // seul un système absent est complété, un autre système connu est refusé par le contrôle.
   if (systemeDe(g) === '') { try { ctx.imposerSysteme(g); } catch (e) { /* refusé au contrôle */ } }
   const r1 = controlerCoucheCache(ctx, g, c, reponse.nbObjets);
   if (r1 !== '') return echec('GML : ' + r1);
-  let rendu = '';
+  etape = 'réécriture en GeoPackage';
   try { rendu = String(ctx.reecrireCouche(g, p.gpkg) || ''); } catch (e) { rendu = ''; }
   if (rendu !== p.gpkg) return echec('GeoPackage non écrit (' + rendu + ')');
+  etape = 'écriture du style';
   try { ecrit = ctx.ecrireFichier(p.qml, style) === true; } catch (e) { ecrit = false; }
   if (!ecrit) return echec('style non écrit');
   let copie = null;
+  etape = 'contrôle du GeoPackage relu';
   try { copie = ctx.ouvrirCouche(p.gpkg + '|layername=' + c.couche, c.nom); } catch (e) { copie = null; }
+  enCause = copie;
   const r2 = controlerCoucheCache(ctx, copie, c, reponse.nbObjets);
   if (r2 !== '') return echec('GeoPackage : ' + r2);
   return { ok: true, couche: copie, raison: '' };
@@ -1910,7 +1943,8 @@ function enregistrerCouche(ctx, c, reponse, horodatage) {
 // téléchargement fait tout refuser (même garde que zipRecu dans Vision.qml). Registre illisible : refus, il n'est pas
 // remplacé par le cache (seul l'ajout d'un zip le remplace, comme le dit le message d'ouverture de demarrerProjet).
 export function cacheEnregistrer(ctx) {
-  const echec = (raison) => ({ ok: false, message: TEXTES_CACHE_ONF.echecLocal, compte: null, raison: raison });
+  const echec = (raison, etape, details) => ({ ok: false, message: TEXTES_CACHE_ONF.echecLocal, compte: null, raison: raison,
+    etape: etape || 'contexte', details: details || null });
   if (!ctx || !estUuid(ctx.visionId) || cacheDossier(ctx.dossierProjet) === '' || !MOTIF_HORODATAGE.test(String(ctx.horodatage))) return echec('contexte');
   if (ctx.depart && (ctx.depart.visionId !== ctx.visionId || ctx.depart.dossierProjet !== ctx.dossierProjet)) return echec('projet changé pendant le téléchargement');
   if (etatRegistre(ctx.reglages, ctx.visionId).illisible) return echec('registre illisible');
@@ -1924,8 +1958,13 @@ export function cacheEnregistrer(ctx) {
     const c = CACHE_ONF.couches[i];
     const rep = ctx.reponses ? ctx.reponses[c.couche] : null;
     if (!rep || typeof rep.texte !== 'string' || typeof rep.nbObjets !== 'number') { effacerGeneration(ctx, ctx.horodatage); return echec(c.couche + ' : réponse absente'); }
-    const r = enregistrerCouche(ctx, c, rep, ctx.horodatage);
-    if (!r.ok) { effacerGeneration(ctx, ctx.horodatage); return echec(r.raison); }
+    let r = null;
+    try {
+      r = enregistrerCouche(ctx, c, rep, ctx.horodatage);
+    } catch (e) {
+      r = { ok: false, raison: c.couche + ' : exception', etape: 'exception', details: { couche: c.couche, exception: texteException(e) } };
+    }
+    if (!r.ok) { effacerGeneration(ctx, ctx.horodatage); return echec(r.raison, r.etape, r.details); }
     copies.push({ c: c, couche: r.couche });
     compte[c.couche] = rep.nbObjets;
   }
@@ -1979,4 +2018,64 @@ function rechargerCacheOnf(ctx, dossier, entrees) {
     bilan.rechargees.push(e.couche);
   }
   return bilan;
+}
+
+// --------------------------------------------------------------------------- diagnostic du cache ONF (aller-retour 2/3)
+
+// Essai n° 1 du prototype sur le Samsung (QField 4.3.8) : « Enregistrement du cache ONF impossible… » sans autre indice. À chaque
+// échec du cache, Vision.qml écrit le diagnostic ci-dessous dans vision-imports/_cache-onf/dernier-echec.txt (écrasé à chaque
+// échec) et dans le journal de QField (console.log). Le texte affiché reste le texte validé.
+export const NOM_DIAGNOSTIC_CACHE = 'dernier-echec.txt';
+
+export function cacheCheminDiagnostic(dossierProjet) {
+  const d = cacheDossier(dossierProjet);
+  return d === '' ? '' : d + '/' + NOM_DIAGNOSTIC_CACHE;
+}
+
+// Texte d'une exception, avec sa pile et sa ligne si le moteur les donne (QML : lineNumber, fileName, stack).
+export function texteException(e) {
+  if (e === undefined || e === null) return '';
+  let t = '';
+  try { t = String(e); } catch (x) { t = 'exception illisible'; }
+  try { if (e.fileName || e.lineNumber) t += ' (' + (e.fileName || '?') + ':' + (e.lineNumber || '?') + ')'; } catch (x) { /* sans effet */ }
+  try { if (e.stack) t += '\n' + String(e.stack); } catch (x) { /* sans effet */ }
+  return t;
+}
+
+function valeurDiagnostic(v) {
+  if (v === undefined) return 'non défini';
+  if (v === null) return 'aucun';
+  if (typeof v === 'string') return v;
+  try { return JSON.stringify(v); } catch (e) { return String(v); }
+}
+
+// Début et fin d'un texte reçu (réponse du service), pour le diagnostic.
+export function extraitReponse(texte, n) {
+  const t = String(texte === undefined || texte === null ? '' : texte);
+  const k = n || 300;
+  return t.length <= 2 * k ? t : t.slice(0, k) + '\n[… ' + (t.length - 2 * k) + ' caractères …]\n' + t.slice(t.length - k);
+}
+
+// d = { date, vision, qfield, etape, couche, raison, exception, message, contexte, details } ; une ligne par élément connu.
+export function cacheTexteDiagnostic(d) {
+  const x = d || {};
+  const date = x.date instanceof Date ? x.date : new Date();
+  const lignes = ['Vision, cache ONF : dernier échec', 'Date : ' + date.toISOString(),
+    'Vision ' + valeurDiagnostic(x.vision) + ' ; QField ' + valeurDiagnostic(x.qfield),
+    'Étape : ' + valeurDiagnostic(x.etape), 'Message affiché : ' + valeurDiagnostic(x.message)];
+  if (x.couche) lignes.push('Couche : ' + x.couche);
+  if (x.raison) lignes.push('Raison : ' + x.raison);
+  if (x.exception) lignes.push('Exception : ' + x.exception);
+  const ajouter = (titre, o) => {
+    if (!o || typeof o !== 'object') return;
+    for (const k in o) {
+      if (!Object.prototype.hasOwnProperty.call(o, k)) continue;
+      const v = o[k];
+      if (v && typeof v === 'object' && !Array.isArray(v) && k !== 'emprise' && k !== 'chemins') ajouter(titre + k + '.', v);
+      else lignes.push(titre + k + ' : ' + valeurDiagnostic(v));
+    }
+  };
+  ajouter('contexte.', x.contexte);
+  ajouter('', x.details);
+  return lignes.join('\n') + '\n';
 }

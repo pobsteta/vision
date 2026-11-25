@@ -442,7 +442,7 @@ points visibles seulement en deçà du 1:50 000 : seuil posé dans l'en-tête `<
 comme à la réouverture ; forêts toujours visibles ; textes ajoutés validés ; garde si le projet change pendant le
 téléchargement ; registre illisible : le cache refuse (« Enregistrement du cache ONF impossible… ») au lieu de le remplacer ;
 couche du cache invalide à la réouverture jamais passée à `libererCouche` (`deleteLater`) ; plugin en 0.7.0. Source OGR :
-options lues par `analyzeURI` (`QG src/core/providers/ogr/qgsogrprovider.cpp` l. 434), puis ouverture l. 206-210.
+options lues par `analyzeURI` (`QG src/core/providers/ogr/qgsogrprovider.cpp` l. 434), puis ouverture par `open()` l. 4392-4523 (les l. 206-210 citées avant concernent la réouverture d'un Shapefile, pas ce chemin).
 
 **Lu dans le code, non essayé sur l'appareil** : `screenToCoordinate` depuis un plugin ; l'option `|option:EXPOSE_GML_ID=NO`
 dans une source OGR de QGIS ; la lecture du `.gfs` voisin par le GDAL du paquet Android (3.12.4 ; essayée avec GDAL 3.8.4
@@ -472,6 +472,46 @@ par « Install plugin from URL », ouvrir `vision.qgz`.
 | 7 | **Second cache** : avec réseau, déplacer la carte sur une autre forêt proche, bouton du cache | nouveau message de réussite ; l'ancienne zone disparaît de la carte, la nouvelle s'affiche ; la ligne du panneau change | capture |
 
 À rapporter : les captures des étapes 1 à 7, la version de QField, et la durée approximative de l'étape 1.
+
+### 11 bis. Essai n° 1 du prototype 0.7.0 (25 novembre 2026, Samsung, QField 4.3.8) : échec local, diagnostic ajouté
+
+Constat (Pascal) : avec réseau, sur une forêt, « Enregistrement du cache ONF impossible : le cache n'est pas mis à jour,
+l'ancien est gardé. », rien d'autre ; registre lisible (6 couches de `Test_avec_Pascal.zip`). Les requêtes sont donc passées
+(sinon « Pas de réseau » ou « Réponse incomplète ») ; l'échec vient de la préparation, d'une exception du pont QML ou de
+l'enregistrement, dont la raison n'était pas montrée.
+
+**Diagnostic (aller-retour 2/3)** : à chaque échec du cache, le plugin écrit `vision-imports/_cache-onf/dernier-echec.txt`
+(écrasé à chaque échec, date dedans) et la même chose dans le journal de QField (`console.log`) : étape, couche, raison,
+exception (avec fichier et ligne quand le moteur les donne), message affiché, contexte (projet, horodatage, emprise), et pour
+la couche en cause : validité, système lu (`authid`, description), type WKB, nombre d'objets lus et reçus, emprise, champs,
+chemins, présence du GML, du `.gfs`, du GeoPackage et du `.qml`, source OGR passée à QGIS. Pour un refus de réponse : URL,
+statut, erreur, longueur, analyse et extrait (300 premiers et derniers caractères). Le texte affiché ne change pas.
+
+**Ce qui diffère de la sonde, qui a réussi sur le même appareil** (la sonde ouvrait le GML sans `.gfs`, sans `|layername=`
+ni `|option:`, sans `imposerSysteme`, et ne contrôlait ni type, ni système, ni emprise, ni nombre relu) ; causes possibles,
+de la plus probable à la moins probable, **aucune certaine à la lecture** :
+
+1. **Le `.gfs` n'est pas pris** (le GML s'ouvre alors comme dans la sonde : système inconnu, type Polygon pour des parcelles) :
+   le système serait imposé, mais le contrôle du type refuserait (« type de géométrie 3 »). Lu dans GDAL 3.12.4 : le `.gfs`
+   voisin est lu s'il n'est pas plus ancien que le GML (`ogrgmldatasource.cpp` l. 861-886) ; il est écrit après. Rien de lu
+   ne l'écarterait, mais rien n'est essayé sur Android.
+2. **Contrôle du système** après lecture par le `.gfs` : `crs.authid` peut ne pas valoir exactement `EPSG:2154` (WKT sans
+   identifiant reconnu) ; la sonde n'a jamais montré le système d'un GML lu avec un système déclaré par un schéma.
+3. **Le dossier de génération à deux niveaux nouveaux** (`_cache-onf/<horodatage>/`, premier cache) :
+   `FileUtils.isWithinProjectDirectory` remonte l'arbre par `QDir::cdUp`, qui échoue sur un parent absent
+   (`QF qffileutils.cpp` l. 576-600) ; le chemin est alors comparé en absolu au dossier du projet **canonique**. Sans lien
+   symbolique dans le chemin, l'écriture passe ; sinon elle est refusée (« écriture du GML refusée »). La sonde n'avait qu'un
+   niveau nouveau.
+4. `|option:EXPOSE_GML_ID=NO` ou `|layername=` dans la source : lus dans QGIS (`qgsogrprovidermetadata.cpp` l. 228-270,
+   `qgsogrprovider.cpp` l. 434 puis `open()` l. 4392-4523), sans raison lue d'échouer.
+5. Une exception du pont QML (`cacheRequete`, `cacheReponse`, `cacheEnregistrer`) : rien de repéré à la relecture (syntaxe
+   contrôlée) ; le diagnostic la donnera avec sa ligne.
+
+Écartées à la lecture : `saveVectorLayerAs` qui rendrait un autre chemin (la sonde montre le chemin demandé, capture n° 2) ;
+`depart` (chaînes de `visionId()` et `dossierProjet()` des deux côtés) ; registre illisible (lisible selon Pascal).
+
+**À relever par Pascal** : refaire le geste de l'essai n° 1 avec le plugin republié, puis rapporter le fichier
+`vision-imports/_cache-onf/dernier-echec.txt` (dans le dossier du projet `projet-vision`), ou une capture de son contenu.
 
 ## 12. Attribution « © ONF » (ajout validé par Pascal le 25 novembre 2026) : impossible depuis le plugin
 

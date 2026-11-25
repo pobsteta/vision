@@ -772,3 +772,84 @@ test('pièce : protocole d\'essai Samsung du cache (§ 11) : forêt de JFC, mode
     assert.ok(s.includes(mot), `§ 11 ne cite pas : ${mot}`);
   }
 });
+
+// ------------------------------------------------------------------------------------------- aller-retour 2/3 : diagnostic
+// Essai n° 1 du prototype sur le Samsung (QField 4.3.8) : « Enregistrement du cache ONF impossible… » sans autre indice. Tout
+// échec laisse un diagnostic (étape, couche, raison, exception, couche en cause décrite) ; le texte affiché ne change pas.
+test('diagnostic : chemin vision-imports/_cache-onf/dernier-echec.txt (écrasé à chaque échec)', () => {
+  assert.equal(L.cacheCheminDiagnostic(PROJET), `${CACHE}/dernier-echec.txt`);
+  assert.equal(L.cacheCheminDiagnostic('relatif'), '');
+});
+
+test('diagnostic : échec au GeoPackage relu : étape, couche, raison, couche en cause décrite (système, type, objets), chemins, .gfs présent', () => {
+  const f = fauxQField();
+  const ouvrir = f.ctx.ouvrirCouche;
+  f.ctx.ouvrirCouche = (uri, n) => { const l = ouvrir(uri, n); if (/PARC_PUBL_FR\.gpkg\|/.test(uri)) l.n -= 1; return l; };
+  const r = L.cacheEnregistrer(f.ctx);
+  assert.equal(r.ok, false);
+  assert.equal(r.message, L.TEXTES_CACHE_ONF.echecLocal);
+  assert.equal(r.etape, 'contrôle du GeoPackage relu');
+  assert.match(r.raison, /^PARC_PUBL_FR : GeoPackage : 52 objets lus, 53 attendus$/);
+  const d = r.details;
+  assert.equal(d.couche, 'PARC_PUBL_FR');
+  assert.equal(d.gfsPresent, true);
+  assert.equal(d.gpkgPresent, true);
+  assert.equal(d.nbObjetsRecus, 53);
+  assert.equal(d.source, `${CACHE}/${H}/PARC_PUBL_FR.gml|layername=PARC_PUBL_FR|option:EXPOSE_GML_ID=NO`);
+  assert.deepEqual([d.coucheEnCause.valide, d.coucheEnCause.systeme, d.coucheEnCause.wkb, d.coucheEnCause.objets], [true, 'EPSG:2154', 6, 52]);
+  const texte = L.cacheTexteDiagnostic({ date: DATE, vision: '0.7.0', qfield: 'v4.3.8', etape: r.etape, raison: r.raison, message: r.message, details: d });
+  for (const attendu of ['Vision, cache ONF : dernier échec', 'Date : ' + DATE.toISOString(), 'Vision 0.7.0 ; QField v4.3.8', 'Étape : contrôle du GeoPackage relu',
+    'Raison : PARC_PUBL_FR : GeoPackage : 52 objets lus, 53 attendus', 'gfsPresent : true', 'coucheEnCause.systeme : EPSG:2154', 'coucheEnCause.wkb : 6',
+    'coucheEnCause.objets : 52', `chemins : {"relatif":"${H}/PARC_PUBL_FR.gpkg"`, 'Message affiché : ' + L.TEXTES_CACHE_ONF.echecLocal]) {
+    assert.ok(texte.includes(attendu), `absent du diagnostic : ${attendu}\n${texte}`);
+  }
+});
+
+test('diagnostic : écriture du GML refusée, puis GML illisible : étapes distinctes', () => {
+  const f = fauxQField();
+  f.ctx.ecrireFichier = () => false;
+  const r = L.cacheEnregistrer(f.ctx);
+  assert.equal(r.etape, 'écriture du GML et du .gfs');
+  assert.match(r.raison, /FOR_PUBL_FR : écriture du GML refusée/);
+  const g = fauxQField();
+  g.ctx.ouvrirCouche = () => ({ isValid: false, crs: { authid: '' }, wkbType: () => 0 });
+  const s = L.cacheEnregistrer(g.ctx);
+  assert.equal(s.etape, 'ouverture du GML');
+  assert.equal(s.details.coucheEnCause.valide, false);
+  assert.equal(s.details.gfsPresent, true, 'le .gfs était là au moment de l\'ouverture');
+});
+
+test('diagnostic : une exception pendant une couche est rattrapée et décrite (jamais un échec muet)', () => {
+  const f = fauxQField();
+  Object.defineProperty(f.ctx, 'styles', { get() { throw new Error('module des styles absent'); } });
+  const r = L.cacheEnregistrer(f.ctx);
+  assert.equal(r.ok, false);
+  assert.equal(r.etape, 'exception');
+  assert.match(r.details.exception, /module des styles absent/);
+  assert.equal(r.message, L.TEXTES_CACHE_ONF.echecLocal);
+});
+
+test('diagnostic : exception avec fichier et ligne (moteur QML), extrait d\'une réponse (début et fin)', () => {
+  const e = new Error('Property \'x\' of object is not a function');
+  e.fileName = 'Vision.qml';
+  e.lineNumber = 612;
+  assert.match(L.texteException(e), /^Error: Property 'x' of object is not a function \(Vision\.qml:612\)/);
+  assert.equal(L.texteException(null), '');
+  const t = 'a'.repeat(400) + 'MILIEU' + 'z'.repeat(400);
+  const x = L.extraitReponse(t, 300);
+  assert.ok(x.startsWith('a'.repeat(300)) && x.endsWith('z'.repeat(300)) && !x.includes('MILIEU'));
+  assert.equal(L.extraitReponse('court', 300), 'court');
+});
+
+test('Vision.qml : chaque catch du cache transmet l\'exception au diagnostic (fichier dernier-echec.txt et console.log)', () => {
+  const s = sectionCache();
+  assert.match(s, /function cacheDiagnostic\(d\) \{[\s\S]*?console\.log\(texte\);[\s\S]*?Logique\.cacheCheminDiagnostic\(dossierProjet\(\)\)[\s\S]*?ecrireFichier\(chemin, texte\)/);
+  for (const f of ['mettreEnCacheOnf', 'cacheRequete', 'cacheReponse']) {
+    const corps = s.slice(s.indexOf(`function ${f}(`), s.indexOf('\n  }\n', s.indexOf(`function ${f}(`)));
+    const catchs = corps.match(/catch \(e\) \{[^}]*\}/g) || [];
+    assert.ok(catchs.length > 0, `${f} : aucun catch`);
+    assert.ok(catchs.some((c) => c.includes('cacheDiagnostic(') && c.includes('Logique.texteException(e)')), `${f} : l'exception n'est pas transmise au diagnostic`);
+  }
+  assert.match(s, /if \(!r\.ok\) cacheDiagnostic\(\{ etape: r\.etape, raison: r\.raison/);
+  assert.match(s, /etape: "réponse jugée : " \+ j\.refus/);
+});
