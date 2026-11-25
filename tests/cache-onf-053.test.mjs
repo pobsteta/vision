@@ -853,3 +853,47 @@ test('Vision.qml : chaque catch du cache transmet l\'exception au diagnostic (fi
   assert.match(s, /if \(!r\.ok\) cacheDiagnostic\(\{ etape: r\.etape, raison: r\.raison/);
   assert.match(s, /etape: "réponse jugée : " \+ j\.refus/);
 });
+
+// ------------------------------------------------------------------------------------------- aller-retour 3/3 : emprise plate
+// Essai sur le Samsung (0.7.0, 9aea228) : « PRS_FR : GML : emprise hors de France » pour un seul point de rencontre
+// (emprise x 922 355,8894, y 6 685 293,045 en EPSG:2154, xmin = xmax, ymin = ymax). Une emprise plate est une emprise de
+// couche valable ; elle reste refusée pour la carte.
+function cacheAvecEmprises(emprises) {
+  const f = fauxQField();
+  const ouvrir = f.ctx.ouvrirCouche;
+  f.ctx.ouvrirCouche = (uri, n) => {
+    const l = ouvrir(uri, n);
+    const c = uri.split('|')[0].replace(/^.*\//, '').replace(/\.[a-z]+$/, '');
+    if (l.isValid && emprises[c]) { const e = emprises[c]; l.extent = () => ({ xMinimum: e[0], yMinimum: e[1], xMaximum: e[2], yMaximum: e[3] }); }
+    return l;
+  };
+  return { f, r: L.cacheEnregistrer(f.ctx) };
+}
+
+test('emprise plate d\'une couche du cache acceptée : un point unique (cas de l\'essai), au GML comme au GeoPackage relu', () => {
+  const { r, f } = cacheAvecEmprises({ PRS_FR: [922355.8894, 6685293.045, 922355.8894, 6685293.045] });
+  assert.equal(r.ok, true, r.raison);
+  assert.equal(f.carte.length, 3);
+});
+
+test('emprise plate acceptée : deux points sur une même ligne horizontale (ymin = ymax), ou verticale (xmin = xmax)', () => {
+  for (const e of [[895000, 6679283, 896000, 6679283], [895717, 6678000, 895717, 6680000]]) {
+    const { r } = cacheAvecEmprises({ PRS_FR: e });
+    assert.equal(r.ok, true, r.raison);
+  }
+});
+
+test('emprise de couche : polygones normaux acceptés ; point hors de France, emprise inversée ou non finie refusés', () => {
+  assert.equal(cacheAvecEmprises({ PARC_PUBL_FR: [895200, 6678800, 897100, 6680800] }).r.ok, true);
+  for (const e of [[5.585, 47.185, 5.585, 47.185], [896000, 6679000, 895000, 6680000], [NaN, 6679000, 895000, 6680000]]) {
+    const { r } = cacheAvecEmprises({ PRS_FR: e });
+    assert.equal(r.ok, false, JSON.stringify(e));
+    assert.match(r.raison, /PRS_FR : GML : emprise hors de France/);
+  }
+});
+
+test('emprise de la carte : une emprise plate reste refusée (« Position de la carte illisible… »)', () => {
+  const plate = { xmin: 922355.8894, ymin: 6685293.045, xmax: 922355.8894, ymax: 6685293.045 };
+  assert.equal(L.cacheJugerEmprise(plate, EMPRISE_VRAISEMBLANCE).message, L.TEXTES_CACHE_ONF.positionIllisible);
+  assert.equal(L.cacheJugerEmprise({ ...plate, xmax: plate.xmax + 1000 }, EMPRISE_VRAISEMBLANCE).refus, 'illisible');
+});

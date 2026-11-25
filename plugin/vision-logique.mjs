@@ -1861,6 +1861,14 @@ export function decrireCoucheCache(ctx, couche) {
   return d;
 }
 
+// Emprise d'une couche du cache : bornes finies, xmin <= xmax et ymin <= ymax. Une emprise plate est valable (un seul point
+// de rencontre, ou des points sur une même ligne : essai sur le Samsung, aller-retour 3/3) ; empriseFinie, stricte, reste
+// celle de l'emprise de la carte.
+function empriseDeCoucheFinie(e) {
+  return !!e && isFinite(e.xmin) && isFinite(e.ymin) && isFinite(e.xmax) && isFinite(e.ymax)
+    && Number(e.xmin) <= Number(e.xmax) && Number(e.ymin) <= Number(e.ymax);
+}
+
 // Contrôle d'une couche ouverte (GML reçu ou GeoPackage relu) : valide, EPSG:2154, type fixé, nombre d'objets attendu,
 // emprise dans la France métropolitaine (s'il y a des objets). Rend '' si bonne, sinon la raison (journal du dev, jamais affichée).
 function controlerCoucheCache(ctx, couche, c, attendus) {
@@ -1873,7 +1881,7 @@ function controlerCoucheCache(ctx, couche, c, attendus) {
     let e = null;
     try { e = lireEmprise(couche); } catch (x) { e = null; }
     const v = ctx.vraisemblance;
-    if (!empriseFinie(e) || !v || e.xmin < v.xmin || e.xmax > v.xmax || e.ymin < v.ymin || e.ymax > v.ymax) return 'emprise hors de France';
+    if (!empriseDeCoucheFinie(e) || !v || e.xmin < v.xmin || e.xmax > v.xmax || e.ymin < v.ymin || e.ymax > v.ymax) return 'emprise hors de France';
   }
   return '';
 }
