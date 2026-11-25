@@ -1,0 +1,28 @@
+Vision, cache ONF : dernier échec
+Date : 2026-11-25T18:15:33.079Z
+Vision 0.7.0 ; QField v4.3.8
+Étape : contrôle du GML
+Message affiché : Enregistrement du cache ONF impossible : le cache n'est pas mis à jour, l'ancien est gardé.
+Raison : PRS_FR : GML : emprise hors de France
+contexte.visionId : d98bf4b8-0fac-4dac-85cf-58e6701aceeb
+contexte.dossierProjet : /storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision
+contexte.horodatage : 20261125T181532Z
+contexte.emprise : {"xmin":922144.9264203536,"ymin":6684193.949110769,"xmax":923771.6655058142,"ymax":6687548.210802824}
+contexte.depart.visionId : d98bf4b8-0fac-4dac-85cf-58e6701aceeb
+contexte.depart.dossierProjet : /storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision
+couche : PRS_FR
+chemins : {"relatif":"20261125T181532Z/PRS_FR.gpkg","gml":"/storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision/vision-imports/_cache-onf/20261125T181532Z/PRS_FR.gml","gfs":"/storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision/vision-imports/_cache-onf/20261125T181532Z/PRS_FR.gfs","gpkg":"/storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision/vision-imports/_cache-onf/20261125T181532Z/PRS_FR.gpkg","qml":"/storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision/vision-imports/_cache-onf/20261125T181532Z/PRS_FR.qml"}
+rendu : 
+nbObjetsRecus : 1
+gmlPresent : true
+gfsPresent : true
+gpkgPresent : false
+qmlPresent : false
+source : /storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision/vision-imports/_cache-onf/20261125T181532Z/PRS_FR.gml|layername=PRS_FR|option:EXPOSE_GML_ID=NO
+coucheEnCause.valide : true
+coucheEnCause.systeme : EPSG:2154
+coucheEnCause.description : RGF93 v1 / Lambert-93
+coucheEnCause.wkb : 1
+coucheEnCause.objets : 1
+coucheEnCause.emprise : {"xmin":922355.8894,"ymin":6685293.045,"xmax":922355.8894,"ymax":6685293.045}
+coucheEnCause.champs : ["iidtn_prs","cinse_dep","loff_prs","cdfci_prs","ccod_cmat","ccod_ctps","llib_prs","lobs_prs","qlat_prs","qlon_prs","qdis_prs","llib_com","cinse_com"]
