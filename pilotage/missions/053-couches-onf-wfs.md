@@ -135,7 +135,7 @@ relu sans réseau. Le prototype est le **cache de zone dans le plugin**, publié
 | Pas de réseau | « Pas de réseau : le cache ONF n'est pas mis à jour, l'ancien est gardé. » |
 | Réponse incomplète | « Réponse incomplète du service ONF : le cache n'est pas mis à jour, l'ancien est gardé. » |
 | Dans le panneau | « Cache ONF du 25/11/2026 : 4 forêts, 53 parcelles, 1 point de rencontre. » |
-| Noms des couches | « Forêts publiques (© ONF) », « Parcelles forestières (© ONF) », « Points de rencontre des secours (© ONF) » (remplacés le 25 novembre 2026, attribution dans le nom) |
+| Noms des couches | « Forêts publiques (© ONF) », « Parcelles forestières (© ONF) », « Points de secours (© ONF) » (remplacés le 25 novembre 2026, attribution dans le nom ; « Points de secours » raccourci par Pascal le même jour) |
 
 Attribution des trois couches : « © ONF » (validée par Pascal le 25 novembre 2026 ; accord de l'ONF rapporté par
 Pascal, trace écrite à verser).
@@ -146,7 +146,7 @@ Pascal, trace écrite à verser).
   « Cache ONF illisible : il n'est pas affiché ; remettez-le en cache avec réseau. » ; « _cache-onf.zip : nom
   réservé par Vision (cache ONF), rien n'est importé. » ;
 - attribution du cache **dans le nom des couches** (le plugin ne peut pas poser `rights`) : « Forêts publiques
-  (© ONF) », « Parcelles forestières (© ONF) », « Points de rencontre des secours (© ONF) » ;
+  (© ONF) », « Parcelles forestières (© ONF) », « Points de secours (© ONF) » (nom raccourci par Pascal, 25 novembre 2026) ;
 - **mêmes seuils** que l'arbitrage n° 2 pour les couches du cache (parcelles et points en deçà du 1:50 000) ;
 - texte ajouté pour une emprise illisible : « Position de la carte illisible : le cache ONF n'est pas mis à jour,
   l'ancien est gardé. » (« Carte hors de France métropolitaine … » reste pour une carte hors de France) ;
