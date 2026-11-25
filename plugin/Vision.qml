@@ -471,4 +471,238 @@ Item {
     const id = visionId();
     return id ? Logique.lireRegistre(reglages, id) : [];
   }
+
+  // ==== sonde 053 : début (outil d'essai, mission 053, étape 1 bis, temps 2 ; docs/referentiels/cache-zone-qfield.md § 8)
+  // Mesure sur l'appareil, sans toucher au registre, sans rien ajouter à la carte ni rien effacer : écrit
+  // seulement dans vision-imports/_sonde-053/ (fichier d'essai, GML reçus, GeoPackage d'essai, rapport.txt).
+  // Appels lus dans QField v4.3.7 : iface.createHttpRequest (qfappinterface.h l. 230 ; qfxmlhttprequest.h l. 62-212),
+  // iface.mapCanvas().mapSettings.visibleExtent et destinationCrs (qfappinterface.h l. 214 ; qgsquickmapsettings.h
+  // l. 72, l. 109), LayerUtils.loadVectorLayer avec fournisseur (qflayerutils.h l. 200), saveVectorLayerAs avec filtre
+  // (l. 254). Textes provisoires : la sonde est un outil d'essai.
+  property string sondeTexte: ""
+  property bool sondeEnCours: false
+  property var sondeLignes: []
+
+  function sondeNoter(ligne) {
+    sondeLignes.push(String(ligne));
+    sondeTexte = sondeLignes.join("\n");
+  }
+
+  function sondeDebut(titre) {
+    sondeLignes = [];
+    sondeTexte = "";
+    sondeNoter("Sonde ONF (" + Logique.SONDE_ONF.version + ", outil d'essai) : " + titre);
+    sondeNoter("Date : " + new Date().toISOString() + " ; Vision " + versionPlugin + " ; QField " + (versionQField() || "version inconnue"));
+  }
+
+  function sondeFin(dossier) {
+    sondeNoter("Fin de la sonde.");
+    let ecrit = false;
+    try { ecrit = ecrireFichier(dossier + "/rapport.txt", sondeTexte + "\n"); } catch (e) { ecrit = false; }
+    sondeNoter(ecrit ? "Compte rendu écrit : " + dossier + "/rapport.txt" : "Compte rendu NON écrit dans " + dossier + "/rapport.txt");
+    sondeEnCours = false;
+    message("Sonde ONF terminée (voir le panneau).");
+  }
+
+  // Emprise visible de la carte, en EPSG:2154 ; reprojetée par ses quatre coins si la carte est dans un autre système.
+  function sondeEmpriseCarte() {
+    const ms = iface.mapCanvas().mapSettings;
+    const r = ms.visibleExtent;
+    const authid = String(ms.destinationCrs.authid || "");
+    let e = { xmin: Number(r.xMinimum), ymin: Number(r.yMinimum), xmax: Number(r.xMaximum), ymax: Number(r.yMaximum) };
+    sondeNoter("Carte : système " + (authid || "inconnu") + ", rotation " + Number(ms.rotation) + "°, emprise visible "
+      + [e.xmin, e.ymin, e.xmax, e.ymax].map(function (v) { return Math.round(v); }).join(", "));
+    if (Number(ms.rotation) !== 0) sondeNoter("Carte tournée : l'emprise lue peut ne pas couvrir tout l'écran.");
+    if (authid !== "EPSG:2154") {
+      const but = CoordinateReferenceSystemUtils.fromDescription("EPSG:2154");
+      const coins = [[e.xmin, e.ymin], [e.xmax, e.ymin], [e.xmax, e.ymax], [e.xmin, e.ymax]].map(function (c) {
+        const p = GeometryUtils.reprojectPoint(GeometryUtils.point(c[0], c[1]), ms.destinationCrs, but);
+        return { x: Number(p.x), y: Number(p.y) };
+      });
+      e = Logique.sondeEmpriseDesPoints(coins);
+    }
+    return e;
+  }
+
+  // Ouvre un GML (pilote OGR GML de GDAL), le décrit, le réécrit en GeoPackage d'essai puis relit ce GeoPackage.
+  // Rend true si le GML s'est ouvert. `attendu` : valeurs attendues (fichier d'essai) ou null.
+  function sondeOuvrirGml(dossier, chemin, nom, champLibelle, attendu) {
+    let c = null;
+    try { c = LayerUtils.loadVectorLayer(chemin, nom); } catch (e) { c = null; }
+    if (!c || !c.isValid) {
+      sondeNoter("  " + nom + " : ouverture du GML ÉCHOUÉE (pilote GML absent, ou fichier illisible)");
+      if (c) c.deleteLater();
+      return false;
+    }
+    let champs = [];
+    try { champs = c.fields.names; } catch (e) { champs = []; }
+    let authid = "";
+    try { authid = String(c.crs.authid || ""); } catch (e) { authid = ""; }
+    let n = 0;
+    const valeurs = [];
+    try {
+      const it = LayerUtils.createFeatureIterator(c);
+      while (it.hasNext()) {
+        const f = it.next();
+        if (n < 3) valeurs.push(String(f.attribute(champLibelle)));
+        n++;
+      }
+      it.close();
+    } catch (e) {
+      sondeNoter("  " + nom + " : lecture des objets interrompue (" + e + ")");
+    }
+    sondeNoter("  " + nom + " : GML ouvert, valide, " + n + " objets, système " + (authid || "inconnu") + ", champs : " + champs.join(", "));
+    sondeNoter("  " + nom + " : " + champLibelle + " lus : " + valeurs.join(" | "));
+    if (attendu) {
+      let justes = 0;
+      for (let i = 0; i < attendu.length; i++) if (valeurs[i] === attendu[i].llib_frt) justes++;
+      sondeNoter("  " + nom + " : accents " + (justes === attendu.length && n === attendu.length ? "JUSTES" : "FAUX") + " (" + justes + "/" + attendu.length + ")");
+    }
+    // GeoPackage d'essai, nom horodaté (aucun fichier encore ouvert n'est écrasé) ; table = nom du fichier (qflayerutils.cpp l. 705).
+    const base = nom + "-" + Date.now();
+    const ecrit = String(LayerUtils.saveVectorLayerAs(c, dossier + "/" + base + ".gpkg", "GPKG") || "");
+    c.deleteLater();
+    if (ecrit === "") {
+      sondeNoter("  " + nom + " : réécriture en GeoPackage REFUSÉE (raison dans le journal de QField)");
+      return true;
+    }
+    let g = null;
+    let m = -1;
+    try {
+      g = LayerUtils.loadVectorLayer(ecrit + "|layername=" + base, base);
+      if (g && g.isValid) {
+        m = 0;
+        const it2 = LayerUtils.createFeatureIterator(g);
+        while (it2.hasNext()) { it2.next(); m++; }
+        it2.close();
+      }
+    } catch (e) { m = -1; }
+    if (g) g.deleteLater();
+    sondeNoter("  " + nom + " : GeoPackage " + ecrit + " : " + (m < 0 ? "illisible" : m + " objets relus") + (m >= 0 && m !== n ? " (ÉCART avec le GML)" : ""));
+    return true;
+  }
+
+  // Voie A : couche WFS de QGIS, réécrite par saveVectorLayerAs avec un filtre d'emprise. L'écran se fige pendant le téléchargement.
+  function sondeVoieA(dossier, couche, emprise) {
+    sondeNoter("  " + couche + " : voie A (couche WFS de QGIS ; écran figé pendant le téléchargement)");
+    const t0 = Date.now();
+    let l = null;
+    try { l = LayerUtils.loadVectorLayer(Logique.sondeUriWfs(couche), couche, "WFS"); } catch (e) { l = null; }
+    if (!l || !l.isValid) {
+      sondeNoter("  " + couche + " : voie A, couche WFS invalide (" + (Date.now() - t0) + " ms)");
+      if (l) l.deleteLater();
+      return;
+    }
+    const base = couche + "-voieA-" + Date.now();
+    const ecrit = String(LayerUtils.saveVectorLayerAs(l, dossier + "/" + base + ".gpkg", "GPKG", Logique.sondeExpressionEmprise(emprise)) || "");
+    l.deleteLater();
+    let m = -1;
+    if (ecrit !== "") {
+      let g = null;
+      try {
+        g = LayerUtils.loadVectorLayer(ecrit + "|layername=" + base, base);
+        if (g && g.isValid) {
+          m = 0;
+          const it = LayerUtils.createFeatureIterator(g);
+          while (it.hasNext()) { it.next(); m++; }
+          it.close();
+        }
+      } catch (e) { m = -1; }
+      if (g) g.deleteLater();
+    }
+    sondeNoter("  " + couche + " : voie A, " + (ecrit === "" ? "écriture REFUSÉE" : ecrit + " : " + (m < 0 ? "illisible" : m + " objets")) + ", " + ((Date.now() - t0) / 1000).toFixed(1) + " s");
+  }
+
+  function sondeFichierEssai(dossier) {
+    const chemin = dossier + "/fixture.gml";
+    let ok = false;
+    try { ok = ecrireFichier(chemin, Logique.sondeFixtureGml()); } catch (e) { ok = false; }
+    sondeNoter("Fichier d'essai (2 forêts fictives, accents) : " + (ok ? "écrit" : "NON écrit") + " dans " + chemin);
+    if (ok) sondeOuvrirGml(dossier, chemin, "FOR_PUBL_FR", "llib_frt", Logique.SONDE_FIXTURE_ATTENDU);
+  }
+
+  // Une couche, puis la suivante (requêtes l'une après l'autre).
+  function sondeCouche(i, emprise, dossier) {
+    const couches = Logique.SONDE_ONF.couches;
+    if (i >= couches.length) { sondeFin(dossier); return; }
+    const couche = couches[i];
+    const url = Logique.sondeUrlGetFeature(couche, emprise);
+    sondeNoter("Requête " + couche + " : " + url);
+    const t0 = Date.now();
+    let fini = false;
+    const req = iface.createHttpRequest();
+    const suite = function (statut, texte, erreur, longueur) {
+      if (fini) return;
+      fini = true;
+      Qt.callLater(function () { sondeReponse(i, emprise, dossier, couche, statut, texte, erreur, longueur, Date.now() - t0); });
+    };
+    req.timeout = 120000;
+    req.onload = function () { suite(Number(req.status), String(req.responseText || ""), "", String(req.getResponseHeader("Content-Length") || "")); };
+    req.onerror = function (code, texte) { suite(Number(req.status), "", "erreur réseau " + code + " : " + texte, ""); };
+    req.ontimeout = function () { suite(0, "", "délai dépassé", ""); };
+    req.onaborted = function () { suite(0, "", "requête annulée", ""); };
+    req.open("GET", url);
+    req.send();
+  }
+
+  function sondeReponse(i, emprise, dossier, couche, statut, texte, erreur, longueur, dureeMs) {
+    const analyse = texte !== "" ? Logique.sondeAnalyserReponse(texte) : null;
+    let octets = 0;
+    let chemin = "";
+    if (texte !== "") {
+      const o = Logique.octetsUtf8(texte);
+      octets = o.length;
+      chemin = dossier + "/" + couche + ".gml";
+      if (!FileUtils.writeFileContent(chemin, Logique.arrayBufferExact(o))) chemin = "";
+    }
+    sondeNoter(Logique.sondeLigneReponse(couche, { statut: statut, octets: octets, dureeMs: dureeMs, erreur: erreur, analyse: analyse })
+      + (longueur !== "" ? " (Content-Length " + longueur + ")" : ""));
+    let ouvert = false;
+    if (chemin !== "" && analyse && analyse.nbObjets > 0) {
+      ouvert = sondeOuvrirGml(dossier, chemin, couche, Logique.SONDE_ONF.libelles[couche], null);
+    } else if (analyse && analyse.complete && analyse.nbObjets === 0) {
+      sondeNoter("  " + couche + " : aucun objet sur cette emprise");
+      ouvert = true;
+    }
+    if (!ouvert && statut === 200) sondeVoieA(dossier, couche, emprise);
+    sondeCouche(i + 1, emprise, dossier);
+  }
+
+  // Bouton « avec réseau » : mode "carte" (emprise visible) ou "serre" (zone d'essai du massif de la Serre).
+  function sonderReseau(mode) {
+    if (sondeEnCours) return;
+    const dossier = Logique.sondeDossier(dossierProjet());
+    sondeDebut(mode === "serre" ? "avec réseau, massif de la Serre (Jura)" : "avec réseau, emprise de la carte");
+    if (dossier === "") { sondeNoter("Dossier du projet inconnu : sonde arrêtée."); return; }
+    let brute = null;
+    if (mode === "serre") {
+      brute = Logique.SONDE_ONF.empriseSerre;
+    } else {
+      try { brute = sondeEmpriseCarte(); } catch (e) { sondeNoter("Carte illisible : " + e); brute = null; }
+    }
+    const r = Logique.sondeEmprise(brute, Controles.EMPRISE_VRAISEMBLANCE);
+    if (r.message) sondeNoter(r.message);
+    if (!r.ok) { sondeFin(dossier); return; }
+    sondeNoter("Emprise demandée (EPSG:2154, x est, y nord) : " + [r.emprise.xmin, r.emprise.ymin, r.emprise.xmax, r.emprise.ymax].map(function (v) { return Math.round(v); }).join(", "));
+    sondeFichierEssai(dossier);
+    sondeEnCours = true;
+    sondeCouche(0, r.emprise, dossier);
+  }
+
+  // Bouton « hors réseau » (mode avion) : le fichier d'essai et les GML déjà reçus, rouverts sans réseau.
+  function sonderHorsReseau() {
+    if (sondeEnCours) return;
+    const dossier = Logique.sondeDossier(dossierProjet());
+    sondeDebut("hors réseau, fichiers déjà reçus");
+    if (dossier === "") { sondeNoter("Dossier du projet inconnu : sonde arrêtée."); return; }
+    sondeFichierEssai(dossier);
+    const couches = Logique.SONDE_ONF.couches;
+    for (let i = 0; i < couches.length; i++) {
+      const chemin = dossier + "/" + couches[i] + ".gml";
+      if (FileUtils.fileExists(chemin)) sondeOuvrirGml(dossier, chemin, couches[i], Logique.SONDE_ONF.libelles[couches[i]], null);
+      else sondeNoter("  " + couches[i] + " : aucun GML reçu auparavant (" + chemin + ")");
+    }
+    sondeFin(dossier);
+  }
+  // ==== sonde 053 : fin
 }

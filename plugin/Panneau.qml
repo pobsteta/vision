@@ -105,6 +105,53 @@ Item {
         }
       }
 
+      // Mission 053, étape 1 bis : sonde ONF, outil d'essai (textes provisoires, à retirer avant toute version stable).
+      Label {
+        Layout.fillWidth: true
+        Layout.topMargin: 24
+        wrapMode: Text.WordWrap
+        color: "black"
+        font.pointSize: 16
+        font.bold: true
+        text: "Sonde ONF : outil d'essai (mission 053), textes provisoires. N'ajoute rien à la carte ni au registre ; écrit dans vision-imports/_sonde-053/."
+      }
+
+      Button {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 72
+        font.pointSize: 16
+        enabled: panneau.vision && !panneau.vision.sondeEnCours
+        text: "Sonde ONF : massif de la Serre (réseau)"
+        onClicked: panneau.vision.sonderReseau("serre")
+      }
+
+      Button {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 72
+        font.pointSize: 16
+        enabled: panneau.vision && !panneau.vision.sondeEnCours
+        text: "Sonde ONF : emprise de la carte (réseau)"
+        onClicked: panneau.vision.sonderReseau("carte")
+      }
+
+      Button {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 72
+        font.pointSize: 16
+        enabled: panneau.vision && !panneau.vision.sondeEnCours
+        text: "Sonde ONF : hors réseau (fichiers reçus)"
+        onClicked: panneau.vision.sonderHorsReseau()
+      }
+
+      Label {
+        Layout.fillWidth: true
+        visible: panneau.vision && panneau.vision.sondeTexte !== ""
+        wrapMode: Text.WrapAnywhere
+        color: "black"
+        font.pointSize: 12
+        text: (panneau.vision && panneau.vision.sondeEnCours ? "Sonde en cours…\n" : "") + (panneau.vision ? panneau.vision.sondeTexte : "")
+      }
+
       Label {
         Layout.fillWidth: true
         Layout.topMargin: 24

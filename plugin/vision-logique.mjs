@@ -1460,3 +1460,178 @@ export function retirerCouche(ctx) {
   const e = effacerCopie(ctx.platformUtilities, cheminCopie(ctx.dossierProjet, zip), dossierCopies(ctx.dossierProjet));
   return { efface: e.efface, message: `${debut}${phrase} ${e.message}` };
 }
+
+// --------------------------------------------------------------------------- sonde 053 (outil d'essai)
+
+// Mission 053, étape 1 bis, temps 2, premier pas : sonde d'essai du cache de zone des couches ONF
+// (docs/referentiels/cache-zone-qfield.md). Elle ne fait que MESURER sur le Samsung : ouvrir un petit GML,
+// interroger le WFS de l'ONF (GetFeature WFS 1.0.0 et BBOX), tenter la voie A si le GML ne s'ouvre pas.
+// Rien n'est inscrit au registre, rien n'est ajouté à la carte ni effacé ; les fichiers vont dans
+// vision-imports/_sonde-053/. Textes provisoires (outil d'essai), jamais définitifs.
+// Plafonds : arbitrage n° 5 de Pascal (fiche 053) : 20 km de côté, 5 000 objets par couche.
+// Zone d'essai par défaut : massif de la Serre (Jura, cas Serre_EA2026 de JFC), WGS84 lon 5,585° E, lat 47,185° N,
+// soit x 895 717, y 6 679 283 en EPSG:2154 (pyproj 3.8.0, ordre x est, y nord ; tests/sonde-onf-053.test.mjs).
+export const SONDE_ONF = {
+  version: 'sonde-053-1',
+  service: 'http://ws.carmencarto.fr/WFS/105/ONF_Forets',
+  couches: ['FOR_PUBL_FR', 'PARC_PUBL_FR', 'PRS_FR'],
+  libelles: { FOR_PUBL_FR: 'llib_frt', PARC_PUBL_FR: 'llib_frt', PRS_FR: 'llib_prs' },
+  coteMax: 20000,
+  objetsMax: 5000,
+  dossier: '_sonde-053',
+  serre: { lon: 5.585, lat: 47.185, x: 895717, y: 6679283 },
+  empriseSerre: { xmin: 893717, ymin: 6677283, xmax: 897717, ymax: 6681283 },
+};
+
+// Fichier GML 2 d'essai, à la forme des réponses de MapServer 7 (espace ms:, msGeometry, gml:coordinates « x,y »),
+// sans schemaLocation (aucun téléchargement de schéma) : deux forêts FICTIVES, accents, EPSG:2154. La première
+// contient le point de la Serre ; la seconde est au nord-ouest. Valeurs attendues à la lecture : SONDE_FIXTURE_ATTENDU.
+export const SONDE_FIXTURE_ATTENDU = [
+  { iidtn_frt: 'F39ESSAI1', llib_frt: 'Forêt d’essai de la Serre (fictive), été' },
+  { iidtn_frt: 'F39ESSAI2', llib_frt: 'Forêt d’essai n° 2 : Ç à ô ü œ' },
+];
+
+function anneauGml(xmin, ymin, xmax, ymax) {
+  return `${xmin},${ymin} ${xmax},${ymin} ${xmax},${ymax} ${xmin},${ymax} ${xmin},${ymin}`;
+}
+
+function membreFixture(f, b) {
+  return '    <gml:featureMember>\n'
+    + '      <ms:FOR_PUBL_FR>\n'
+    + `        <gml:boundedBy><gml:Box srsName="EPSG:2154"><gml:coordinates>${b[0]},${b[1]} ${b[2]},${b[3]}</gml:coordinates></gml:Box></gml:boundedBy>\n`
+    + '        <ms:msGeometry><gml:MultiPolygon srsName="EPSG:2154"><gml:polygonMember><gml:Polygon><gml:outerBoundaryIs><gml:LinearRing>'
+    + `<gml:coordinates>${anneauGml(b[0], b[1], b[2], b[3])}</gml:coordinates>`
+    + '</gml:LinearRing></gml:outerBoundaryIs></gml:Polygon></gml:polygonMember></gml:MultiPolygon></ms:msGeometry>\n'
+    + `        <ms:iidtn_frt>${f.iidtn_frt}</ms:iidtn_frt>\n`
+    + `        <ms:llib_frt>${f.llib_frt}</ms:llib_frt>\n`
+    + '        <ms:cdom_frt>FD</ms:cdom_frt>\n'
+    + '        <ms:cinse_dep>D39</ms:cinse_dep>\n'
+    + '      </ms:FOR_PUBL_FR>\n'
+    + '    </gml:featureMember>\n';
+}
+
+export function sondeFixtureGml() {
+  const boites = [[895200, 6678800, 896200, 6679800], [893900, 6680500, 894400, 6681000]];
+  return '<?xml version=\'1.0\' encoding="UTF-8" ?>\n'
+    + '<wfs:FeatureCollection xmlns:ms="http://mapserver.gis.umn.edu/mapserver" xmlns:wfs="http://www.opengis.net/wfs" '
+    + 'xmlns:gml="http://www.opengis.net/gml" xmlns:ogc="http://www.opengis.net/ogc">\n'
+    + '    <gml:boundedBy><gml:Box srsName="EPSG:2154"><gml:coordinates>893900,6678800 896200,6681000</gml:coordinates></gml:Box></gml:boundedBy>\n'
+    + membreFixture(SONDE_FIXTURE_ATTENDU[0], boites[0])
+    + membreFixture(SONDE_FIXTURE_ATTENDU[1], boites[1])
+    + '</wfs:FeatureCollection>\n';
+}
+
+// Dossier de la sonde : <dossier du projet>/vision-imports/_sonde-053 ; '' si le dossier du projet n'est pas sain.
+export function sondeDossier(dossierProjet) {
+  const d = dossierCopies(dossierProjet);
+  return d === '' ? '' : d + '/' + SONDE_ONF.dossier;
+}
+
+function empriseFinie(e) {
+  return !!e && isFinite(e.xmin) && isFinite(e.ymin) && isFinite(e.xmax) && isFinite(e.ymax)
+    && Number(e.xmin) < Number(e.xmax) && Number(e.ymin) < Number(e.ymax);
+}
+
+// Emprise demandée, en EPSG:2154 { xmin, ymin, xmax, ymax } : ramenée à coteMax de côté au plus (centrée), puis
+// contrôlée contre l'emprise de vraisemblance de la France métropolitaine (vision-controles.mjs). Rend
+// { ok, emprise, plafonnee, message }.
+export function sondeEmprise(e, vraisemblance) {
+  if (!empriseFinie(e)) {
+    return { ok: false, emprise: null, plafonnee: false, message: 'Sonde : emprise de la carte illisible ou vide : rien n\'est demandé.' };
+  }
+  const c = SONDE_ONF.coteMax;
+  let r = { xmin: Number(e.xmin), ymin: Number(e.ymin), xmax: Number(e.xmax), ymax: Number(e.ymax) };
+  let plafonnee = false;
+  if (r.xmax - r.xmin > c) { const cx = (r.xmin + r.xmax) / 2; r.xmin = cx - c / 2; r.xmax = cx + c / 2; plafonnee = true; }
+  if (r.ymax - r.ymin > c) { const cy = (r.ymin + r.ymax) / 2; r.ymin = cy - c / 2; r.ymax = cy + c / 2; plafonnee = true; }
+  const v = vraisemblance;
+  if (v && (r.xmin < v.xmin || r.xmax > v.xmax || r.ymin < v.ymin || r.ymax > v.ymax)) {
+    return { ok: false, emprise: null, plafonnee: plafonnee,
+      message: 'Sonde : emprise hors de France métropolitaine en Lambert 93 (EPSG:2154) : rien n\'est demandé.' };
+  }
+  return { ok: true, emprise: r, plafonnee: plafonnee,
+    message: plafonnee ? `Sonde : zone ramenée à ${c / 1000} km de côté au plus (plafond), centrée sur la carte.` : '' };
+}
+
+// Boîte englobante de points { x, y } (coins d'une carte tournée ou reprojetée) ; null si vide ou non fini.
+export function sondeEmpriseDesPoints(points) {
+  if (!points || points.length === 0) return null;
+  const r = { xmin: Infinity, ymin: Infinity, xmax: -Infinity, ymax: -Infinity };
+  for (let i = 0; i < points.length; i++) {
+    const x = Number(points[i].x);
+    const y = Number(points[i].y);
+    if (!isFinite(x) || !isFinite(y)) return null;
+    if (x < r.xmin) r.xmin = x;
+    if (x > r.xmax) r.xmax = x;
+    if (y < r.ymin) r.ymin = y;
+    if (y > r.ymax) r.ymax = y;
+  }
+  return r;
+}
+
+function coucheSonde(couche) {
+  if (SONDE_ONF.couches.indexOf(couche) < 0) throw new Error('sonde : couche inconnue ' + couche);
+  return couche;
+}
+
+// GetFeature WFS 1.0.0 : BBOX « xmin,ymin,xmax,ymax » dans le système de la couche (EPSG:2154, x est puis y nord,
+// pas d'inversion d'axes en 1.0.0), arrondie vers l'extérieur au mètre ; MAXFEATURES = plafond + 1 (plafond dépassé
+// = plafond + 1 objets reçus). Sortie GML 2 par défaut de MapServer.
+export function sondeUrlGetFeature(couche, e) {
+  coucheSonde(couche);
+  const bbox = [Math.floor(e.xmin), Math.floor(e.ymin), Math.ceil(e.xmax), Math.ceil(e.ymax)].join(',');
+  return `${SONDE_ONF.service}?SERVICE=WFS&VERSION=1.0.0&REQUEST=GetFeature&TYPENAME=${couche}&BBOX=${bbox}&MAXFEATURES=${SONDE_ONF.objetsMax + 1}`;
+}
+
+// Voie A : URI du fournisseur WFS de QGIS (paramètres : QGIS 3a92eb3 src/providers/wfs/qgswfsconstants.cpp l. 28-53).
+export function sondeUriWfs(couche) {
+  coucheSonde(couche);
+  return `url='${SONDE_ONF.service}' typename='${couche}' version='1.0.0' srsname='EPSG:2154' maxNumFeatures='${SONDE_ONF.objetsMax + 1}' pagingEnabled='false' restrictToRequestBBOX='0'`;
+}
+
+// Voie A : filtre d'emprise passé à saveVectorLayerAs, traduit en <ogc:BBOX> par QGIS (qgsogcutils.cpp l. 2531-2563).
+export function sondeExpressionEmprise(e) {
+  const p = `${e.xmin} ${e.ymin}, ${e.xmax} ${e.ymin}, ${e.xmax} ${e.ymax}, ${e.xmin} ${e.ymax}, ${e.xmin} ${e.ymin}`;
+  return `intersects_bbox($geometry, geom_from_wkt('POLYGON((${p}))'))`;
+}
+
+function compter(texte, motif) {
+  const m = texte.match(motif);
+  return m ? m.length : 0;
+}
+
+// Analyse d'une réponse GetFeature reçue en texte (QfXmlHttpRequest.responseText, décodé en UTF-8) :
+// une réponse coupée arrive par onload avec un texte tronqué (qfxmlhttprequest.cpp l. 622-631) : seule la fin de
+// collection prouve qu'elle est complète ; MapServer renvoie ses exceptions en HTTP 200.
+export function sondeAnalyserReponse(texte) {
+  const t = String(texte === undefined || texte === null ? '' : texte);
+  const decl = /^\s*<\?xml[^>]*encoding\s*=\s*["']([^"']+)["']/i.exec(t);
+  let exception = '';
+  if (/<ServiceExceptionReport\b|<ServiceException\b/.test(t)) {
+    const m = /<ServiceException\b[^>]*>([\s\S]*?)<\/ServiceException>/.exec(t);
+    exception = m && m[1].trim() !== '' ? m[1].trim() : 'exception sans message';
+  }
+  const nbObjets = compter(t, /<gml:featureMember[\s>]/g);
+  return {
+    encodage: decl ? decl[1] : '',
+    complete: exception === '' && /<\/(?:[A-Za-z0-9_]+:)?FeatureCollection>\s*$/.test(t),
+    exception: exception,
+    nbObjets: nbObjets,
+    plafondDepasse: nbObjets > SONDE_ONF.objetsMax,
+    remplacements: compter(t, /�/g),
+  };
+}
+
+// Ligne du compte rendu pour une requête : r = { statut, octets, dureeMs, erreur, analyse }.
+export function sondeLigneReponse(couche, r) {
+  const duree = (Number(r.dureeMs) / 1000).toFixed(1) + ' s';
+  if (r.erreur || !r.analyse) {
+    return `${couche} : échec (${r.erreur || 'réponse vide'}), HTTP ${r.statut}, ${duree}`;
+  }
+  const a = r.analyse;
+  let l = `${couche} : HTTP ${r.statut}, ${r.octets} octets, ${duree}, ${a.nbObjets} objets, ${a.complete ? 'complète' : 'INCOMPLÈTE'}, encodage ${a.encodage || 'non déclaré'}`;
+  if (a.exception) l += `, exception : ${a.exception}`;
+  if (a.plafondDepasse) l += `, PLAFOND DÉPASSÉ (plus de ${SONDE_ONF.objetsMax} objets)`;
+  if (a.remplacements > 0) l += `, ${a.remplacements} caractères illisibles`;
+  return l;
+}

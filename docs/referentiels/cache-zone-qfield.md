@@ -327,3 +327,36 @@ carte, rien d'effacé ; fichiers dans `vision-imports/_sonde-053/`.
 
 Le dossier `_sonde-053` serait celui d'un zip `_sonde-053.zip` : collision improbable, acceptée pour un outil
 d'essai ; la garde d'import des noms réservés est prévue avec R2 (§ 4).
+
+## 9. Protocole d'essai de la sonde sur le Samsung (court)
+
+**Mise en ligne** (Pascal, une fois la branche poussée par l'orchestrateur) : lancer à la main le workflow « Release du
+plugin » sur la branche de la mission :
+`gh workflow run release-plugin.yml --repo pobsteta/vision --ref claude/awesome-dirac-sbuica`
+(ou, sur GitHub : Actions, « Release du plugin », « Run workflow », branche `claude/awesome-dirac-sbuica`). Hors de
+`main`, `outils/decider-release.mjs` publie la **préversion** `plugin-essai` (jamais « latest », jamais `plugin-v*`),
+après `node --test` ; la version reste 0.6.0 (une fusion par erreur sur `main` échouerait sur l'étiquette
+`plugin-v0.6.0` déjà prise : pas de version stable possible par ce chemin). Adresse d'installation :
+`https://github.com/pobsteta/vision/releases/download/plugin-essai/plugin-vision.zip` (flashcode dans les notes).
+
+1. **Installer** : QField, Paramètres, Plugins, « Install plugin from URL », l'adresse ci-dessus ; ouvrir `vision.qgz`.
+2. **Avec réseau** (wifi ou 4G), bouton Vision, « Sonde ONF : massif de la Serre (réseau) ». Attendre « Fin de la
+   sonde ». Noter ou photographier le compte rendu ; il est aussi dans `vision-imports/_sonde-053/rapport.txt`.
+3. Zoomer la carte sur une forêt connue de JFC (zone de moins de 20 km), puis « Sonde ONF : emprise de la carte
+   (réseau) ».
+4. **Mode avion**, « Sonde ONF : hors réseau (fichiers reçus) » : le fichier d'essai et les GML reçus se rouvrent-ils ?
+5. Rapporter les trois comptes rendus (ou les `rapport.txt` successifs : le dernier écrase le précédent, copier entre
+   deux essais si possible).
+
+**Ce que le compte rendu doit dire, ligne par ligne :**
+
+| Ligne | Si bon | Si mauvais : ce que ça veut dire |
+|---|---|---|
+| `fixture : GML ouvert, valide, 2 objets, système EPSG:2154` puis `accents JUSTES (2/2)` | le pilote GML est dans le paquet : voie B possible | `ouverture du GML ÉCHOUÉE` : pilote absent, voie B tombe, la voie A est essayée sur le réseau |
+| `GeoPackage … : 2 objets relus` | `saveVectorLayerAs` passe malgré `gml_id` | `REFUSÉE` ou `ÉCART` : défaut `gml_id` NOT NULL à traiter |
+| `FOR_PUBL_FR : HTTP 200, … objets, complète, encodage UTF-8` (idem pour les deux autres couches) | requête http, contenu complet | `échec (…)` : réseau ; `INCOMPLÈTE` : coupure ; `exception` : refus du serveur ; `encodage ISO-8859-1` ou `caractères illisibles` : accents perdus en voie B |
+| `voie A …` (seulement si le GML reçu ne s'ouvre pas) | objets écrits, durée | `couche WFS invalide` ou `REFUSÉE` |
+| hors réseau : mêmes ouvertures qu'avec réseau | lecture sans réseau | — |
+
+Ce que la sonde **ne** prouve **pas** : le rendu des styles, le rechargement à la réouverture du projet, la tenue au
+plafond sur une vraie grosse zone (prototype de cache, après la sonde).
