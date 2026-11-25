@@ -2,7 +2,7 @@
 
 > Fiche rédigée par Claude (orchestrateur) le 25 novembre 2026, à la demande de Pascal (« peux-tu
 > ajouter ce service WFS au projet vision avec les couches Forêt, parcelles et point de rencontre en
-> prenant comme style les styles joints »). **Statut : proposée, à valider par Pascal.**
+> prenant comme style les styles joints »). **Statut : validée par Pascal le 25 novembre 2026** (« je valide »).
 >
 > **Changement de cap** : le bilan n° 1 (5 novembre 2026) suspendait les nouvelles fonctions jusqu'aux
 > résultats de recette ; Pascal lève cette pause pour ce sujet en le demandant (journal du 25 novembre).
