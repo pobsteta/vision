@@ -180,6 +180,12 @@ fichier (API exposée à QML), remplacement d'un GeoPackage ouvert sur Android, 
 GeoPackage vides livrés avec le projet, rechargement et registre, place du groupe (proposition : « ONF Cache » au-dessus
 de « ONF WFS »). Si une voie est prouvée : prototype, essai Samsung, puis documentation et ADR 0010 amendée.
 
+**Arbitrages de Pascal sur l'étape 3 (25 novembre 2026)** : voie 1 du § 14 de la pièce (couches à chemin fixe
+`vision-imports/_cache-onf/actuel/<couche>.gpkg` dans le groupe « ONF Cache » de `vision.qgz`, bascule par renommage
+avec retour arrière, `reload()`, GeoPackage vides dans `projet-vision.zip` seulement, jamais dans la mise à jour,
+fichiers manquants créés par le plugin, migration du cache existant, consigne « plugin d'abord, puis vision.qgz ») ;
+groupes « ONF Cache » et « ONF WFS » **cochés tous les deux** par défaut ; **sonde courte sur le Samsung d'abord**.
+
 ## Terrain
 
 Sur le Samsung : avec réseau, les trois couches s'affichent aux styles fournis, Parcelles et Points
