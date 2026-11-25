@@ -46,6 +46,13 @@
    des points de secours sur `iidtn_prs`, `llib_prs`, `llib_com`…), symboles, couleurs et seuils gardés :
    copies adaptées générées depuis les `.qml` de Pascal, qui restent intacts dans `docs/referentiels/brut/onf/`.
 
+5. **Plafond du cache** : zone de 20 km de côté au plus et 5 000 objets par couche au plus ; au-delà, refus et
+   demande de zoomer.
+6. **Rangement** : le cache en tête de liste (un plugin ne peut pas ranger une couche dans un groupe,
+   `layerTreeRoot()` non exposé à QML) ; l'arbitrage n° 2 (groupe « ONF ») vaut pour les couches WFS du
+   projet modèle seulement.
+7. **Une seule zone à la fois** : un nouveau cache remplace le précédent, gardé si le nouveau échoue.
+
 Mesure n° 1 : `docs/referentiels/brut/onf/mesure-2026-11-25.md` (service en WFS 1.0.0, 1.1.0 et 2.0.0 ;
 17 190 forêts, 408 400 parcelles, 24 343 points ; licence non lue).
 
