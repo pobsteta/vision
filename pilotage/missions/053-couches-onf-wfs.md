@@ -9,7 +9,7 @@
 
 ## Ce qui est su (25 novembre 2026)
 
-- **Service** : `http://ws.carmencarto.fr/WFS/105/ONF_Forets?`, MapServer 7.0.0, **WFS 1.0.0 seulement**,
+- **Service** : `http://ws.carmencarto.fr/WFS/105/ONF_Forets?`, MapServer 7.0.0, **WFS 1.0.0 annoncé** par le GetCapabilities fourni (sans preuve que 1.1.0 et 2.0.0 sont refusés : la mesure le dira),
   **http seulement** (le port 443 coupe la connexion), « Données publiques de l'ONF en Métropole »,
   « Aucune condition ne s'applique ». GetCapabilities fourni par Pascal, versé dans
   `docs/referentiels/brut/onf/` avec les trois styles (versés tels quels).
