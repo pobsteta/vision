@@ -126,6 +126,50 @@ Item {
         }
       }
 
+      // Mission 053, étape 3 : sonde C4, outil d'essai (textes provisoires, à retirer avant toute fusion vers main).
+      Label {
+        Layout.fillWidth: true
+        Layout.topMargin: 24
+        wrapMode: Text.WordWrap
+        color: "black"
+        font.pointSize: 16
+        font.bold: true
+        text: "Sonde C4 : outil d'essai (mission 053), textes provisoires. Ajoute à la carte une couche « Sonde C4 (essai) » ; écrit dans vision-imports/_sonde-c4/."
+      }
+
+      Button {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 72
+        font.pointSize: 16
+        text: "Sonde C4 : préparer et afficher"
+        onClicked: panneau.vision.sondeC4Preparer()
+      }
+
+      Button {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 72
+        font.pointSize: 16
+        text: "Sonde C4 : bascule et relecture"
+        onClicked: panneau.vision.sondeC4Bascule()
+      }
+
+      Button {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 72
+        font.pointSize: 16
+        text: "Sonde C4 : retirer la couche de sonde"
+        onClicked: panneau.vision.sondeC4Retirer()
+      }
+
+      Label {
+        Layout.fillWidth: true
+        visible: panneau.vision && panneau.vision.sondeC4Texte !== ""
+        wrapMode: Text.WrapAnywhere
+        color: "black"
+        font.pointSize: 12
+        text: panneau.vision ? panneau.vision.sondeC4Texte : ""
+      }
+
       Label {
         Layout.fillWidth: true
         Layout.topMargin: 24

@@ -707,4 +707,79 @@ Item {
     });
   }
   // ==== cache ONF : fin
+
+  // ==== sonde C4 : début (outil d'essai, mission 053, étape 3, temps 2 ; docs/referentiels/cache-zone-qfield.md § 14 bis)
+  // À RETIRER AVANT TOUTE FUSION VERS MAIN (tests/sonde-c4-053.test.mjs, « garde » : la sonde ne vit qu'avec VERSION 0.7.0).
+  // Mesure la bascule d'une couche de la carte par renommage de son GeoPackage, puis reload() (voie C4, § 14). Rien au
+  // registre ni au cache ONF ; fichiers dans vision-imports/_sonde-c4/ ; couche « Sonde C4 (essai) » ajoutée à la carte,
+  // retirée par un bouton. Appels lus : platformUtilities.renameFile (QField qfplatformutilities.h l. 132), reload()
+  // (QGIS qgsmaplayer.h l. 556), triggerRepaint() (l. 1934, slot). Textes provisoires.
+  property string sondeC4Texte: ""
+
+  function sondeC4Services() {
+    return {
+      ecrireFichier: ecrireFichier,
+      existe: function (c) { return FileUtils.fileExists(c); },
+      ouvrir: function (uri, nom) { return LayerUtils.loadVectorLayer(uri, nom); },
+      reecrire: function (l, cible) { return String(LayerUtils.saveVectorLayerAs(l, cible, "GPKG") || ""); },
+      creerIterateur: function (l) { return LayerUtils.createFeatureIterator(l); },
+      ajouter: function (l) { l.setCustomProperty("vision/sonde", "c4"); ProjectUtils.addMapLayer(qgisProject, l); },
+      renommer: function (de, vers) { return !!platformUtilities.renameFile(de, vers, true); },
+      recharger: function (l) { l.reload(); l.triggerRepaint(); },
+      maintenant: function () { return Date.now(); }
+    };
+  }
+
+  function coucheSondeC4() {
+    if (!qgisProject) return null;
+    const couches = ProjectUtils.mapLayers(qgisProject);
+    for (const id in couches) {
+      const l = couches[id];
+      if (l && typeof l.customProperty === "function" && String(l.customProperty("vision/sonde", "")) === "c4") return l;
+    }
+    return null;
+  }
+
+  // Affiche le compte rendu et l'écrit dans vision-imports/_sonde-c4/rapport-<horodatage>.txt.
+  function sondeC4Rapport(lignes) {
+    const entete = "Date : " + new Date().toISOString() + " ; Vision " + versionPlugin + " ; QField " + (versionQField() || "version inconnue");
+    let texte = [entete].concat(lignes).join("\n");
+    const c = Logique.sondeC4Chemins(dossierProjet());
+    if (c) {
+      const chemin = c.dossier + "/" + Logique.sondeC4NomRapport(new Date());
+      let ecrit = false;
+      try { ecrit = ecrireFichier(chemin, texte + "\n"); } catch (e) { ecrit = false; }
+      texte += "\nCompte rendu : " + (ecrit ? chemin : "NON écrit (" + chemin + ")");
+    }
+    sondeC4Texte = texte;
+    console.log(texte);
+    message("Sonde C4 terminée (voir le panneau).");
+  }
+
+  function sondeC4Preparer() {
+    if (coucheSondeC4()) { sondeC4Rapport(["Sonde C4 : couche de sonde déjà sur la carte : la retirer d'abord."]); return; }
+    let r = null;
+    try { r = Logique.sondeC4Preparer(dossierProjet(), sondeC4Services()); } catch (e) { r = { lignes: ["EXCEPTION : " + Logique.texteException(e)] }; }
+    sondeC4Rapport(r.lignes);
+  }
+
+  function sondeC4Bascule() {
+    let r = null;
+    try { r = Logique.sondeC4Bascule(dossierProjet(), sondeC4Services(), coucheSondeC4()); } catch (e) { r = { lignes: ["EXCEPTION : " + Logique.texteException(e)] }; }
+    sondeC4Rapport(r.lignes);
+  }
+
+  function sondeC4Retirer() {
+    const lignes = ["Sonde C4 (outil d'essai, textes provisoires) : retrait"];
+    let n = 0;
+    try {
+      let l = coucheSondeC4();
+      while (l && n < 10) { ProjectUtils.removeMapLayer(qgisProject, String(l.id)); n++; l = coucheSondeC4(); }
+      lignes.push(n + " couche(s) de sonde retirée(s) de la carte ; fichiers gardés dans vision-imports/_sonde-c4/");
+    } catch (e) {
+      lignes.push("EXCEPTION : " + Logique.texteException(e));
+    }
+    sondeC4Rapport(lignes);
+  }
+  // ==== sonde C4 : fin
 }

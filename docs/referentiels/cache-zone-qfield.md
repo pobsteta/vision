@@ -687,3 +687,46 @@ avant le prototype ?
 Remarque hors périmètre : la page « Unable to load some layers » attendue à l'ouverture **sans réseau** à cause des couches
 WFS (relecture d'ensemble, journal) n'est pas traitée ici ; le groupe « ONF Cache » à couches GeoPackage n'y ajoute rien
 tant que ses fichiers existent.
+
+### 14 bis. Sonde C4 (étape 3, temps 2) et protocole d'essai sur le Samsung
+
+Arbitrages de Pascal sur l'étape 3 (fiche 053) : voie 1, groupes « ONF Cache » et « ONF WFS » cochés par défaut, **sonde
+courte d'abord**. La sonde C4 est un **outil d'essai** du plugin 0.7.0 (préversion `plugin-essai`), textes provisoires, à retirer
+avant toute fusion vers `main` (garde : `tests/sonde-c4-053.test.mjs`). Elle ne touche ni au registre, ni au cache ONF, ni à
+`vision.qgz` ; elle écrit seulement dans `vision-imports/_sonde-c4/` et ajoute à la carte une couche « Sonde C4 (essai) »,
+retirée par son bouton. Code : section « sonde C4 » de `plugin/vision-logique.mjs` (logique testée) et de `plugin/Vision.qml`.
+
+Ce qu'elle fait :
+
+1. **« Sonde C4 : préparer et afficher »** : écrit, par la voie prouvée (GML + `.gfs` réécrits par `saveVectorLayerAs`),
+   `actuel/SONDE_C4.gpkg` (A : 2 points près du massif de la Serre, x 895 717, y 6 679 283 en EPSG:2154) et `vide/SONDE_C4.gpkg`
+   (0 objet) ; ouvre le GeoPackage vide et le décrit ; ouvre A **seulement** par la couche de la carte (une seconde couche sur
+   le même fichier partagerait le jeu de données GDAL et fausserait la mesure) et l'ajoute à la carte ; relève `-wal`/`-shm`.
+2. **« Sonde C4 : bascule et relecture »** : écrit B (3 points, 500 m à l'est) dans `b/` ; met A de côté
+   (`platformUtilities.renameFile` vers `sauvegarde/`), renomme B au chemin de A, puis `reload()` et `triggerRepaint()` sur la
+   couche de la carte : nombre d'objets relu (attendu 3), durée, `-wal`/`-shm` avant et après ; puis **retour arrière**
+   (renommages inverses, `reload()`) : attendu 2. Ligne finale `VERDICT : bascule par renommage puis reload() PROUVÉE` ou
+   `NON PROUVÉE`.
+3. **« Sonde C4 : retirer la couche de sonde »** : `ProjectUtils.removeMapLayer` ; les fichiers restent.
+4. Chaque bouton affiche son compte rendu dans le panneau et l'écrit dans `vision-imports/_sonde-c4/rapport-<horodatage>.txt`
+   (heure UTC, un fichier par geste).
+
+**Mise en ligne** (Pascal, une fois la branche poussée) :
+`gh workflow run release-plugin.yml --repo pobsteta/vision --ref claude/awesome-dirac-sbuica` ; installer par l'adresse de
+`plugin-essai` ; ouvrir `vision.qgz` (aucun réseau nécessaire).
+
+**Protocole court** :
+
+| N° | Geste | Attendu | Si autre chose |
+|---|---|---|---|
+| 1 | Bouton Vision, « Sonde C4 : préparer et afficher » | `vide : valide, 0 objet, WKB 1, système EPSG:2154` ; `A (actuel) : valide, 2 objets, WKB 1, système EPSG:2154` ; couche « Sonde C4 (essai) » en tête de liste, 2 points dans le massif de la Serre, à 100 m l'un de l'autre sur un axe nord-sud, à partir du point x 895 717, y 6 679 283 (EPSG:2154) ; `-wal : absent, -shm : absent` | capture du panneau |
+| 2 | « Sonde C4 : bascule et relecture » | `couche affichée relue : 3 objets (attendu 3)` ; à l'écran, les 3 points 500 m à l'est ; `retour arrière : … 2 objets (attendu 2)` ; `VERDICT : … PROUVÉE` ; durée relevée | capture ; noter `-wal`/`-shm` |
+| 3 | Refaire le n° 2 une fois | même verdict | capture |
+| 4 | Fermer puis rouvrir `vision.qgz` | la couche de sonde a disparu (elle n'est ni au registre ni au projet) | — |
+| 5 | « Sonde C4 : préparer et afficher », puis « Sonde C4 : retirer la couche de sonde » | `1 couche(s) de sonde retirée(s)` | — |
+| 6 | **Page « Unable to load some layers »** (geste sans code, pour la consigne d'ordre de mise à jour) : dans QGIS sur le PC, ouvrir un petit projet d'essai qui déclare une couche GeoPackage, l'envoyer sur le Samsung **sans** le GeoPackage, l'ouvrir dans QField | la page « Unable to load some layers » s'affiche, avec le nom et le chemin de la couche | capture (sert à écrire la consigne « plugin d'abord, puis `vision.qgz` ») |
+
+À rapporter : les comptes rendus `rapport-<horodatage>.txt` (ou captures) des gestes 1, 2, 3 et 5, la capture du geste 6, la
+version de QField. Si le verdict est « PROUVÉE », le prototype du groupe « ONF Cache » (temps 3) peut suivre la voie 1 ; sinon,
+noter ce que la couche relue a affiché (2 objets : `reload()` n'a pas relu le nouveau fichier ; couche invalide : le renommage
+d'un fichier ouvert pose problème sous Android).

@@ -2087,3 +2087,139 @@ export function cacheTexteDiagnostic(d) {
   ajouter('', x.details);
   return lignes.join('\n') + '\n';
 }
+
+// ==== sonde C4 : début (outil d'essai, mission 053, étape 3, temps 2 ; docs/referentiels/cache-zone-qfield.md § 14 bis)
+// À RETIRER AVANT TOUTE FUSION VERS MAIN (tests/sonde-c4-053.test.mjs, « garde » : la sonde ne vit qu'avec VERSION 0.7.0).
+// Mesure sur le Samsung ce que la voie C4 + bascule (§ 14) suppose : une couche de la carte dont le GeoPackage est remplacé
+// par renommage (platformUtilities.renameFile) puis relu par couche.reload() ; un GeoPackage vide valide. Rien au registre,
+// rien au cache ONF, fichier du projet non modifié ; fichiers dans vision-imports/_sonde-c4/ ; une couche « Sonde C4 (essai) » est
+// ajoutée à la carte et se retire par un bouton. Textes provisoires (outil d'essai).
+export const SONDE_C4 = { dossier: '_sonde-c4', table: 'SONDE_C4', nom: 'Sonde C4 (essai)', x: 895717, y: 6679283 };
+
+export function sondeC4Chemins(dossierProjet) {
+  const d = dossierCopies(dossierProjet);
+  if (d === '') return null;
+  const base = d + '/' + SONDE_C4.dossier;
+  const f = '/' + SONDE_C4.table + '.gpkg';
+  return { dossier: base, actuel: base + '/actuel' + f, b: base + '/b' + f, sauvegarde: base + '/sauvegarde' + f, vide: base + '/vide' + f, travail: base + '/travail' };
+}
+
+export function sondeC4NomRapport(date) {
+  return 'rapport-' + cacheHorodatage(date) + '.txt';
+}
+
+// GML 2 de forme MapServer : n points en EPSG:2154 (x est, y nord), espacés de 100 m vers le nord à partir du point de la
+// Serre décalé de `dx` mètres vers l'est (x 895 717, y 6 679 283 : point du terrain de la mission, vérifié par pyproj).
+export function sondeC4Gml(n, dx) {
+  let m = '';
+  for (let i = 0; i < n; i++) {
+    const x = SONDE_C4.x + (dx || 0);
+    const y = SONDE_C4.y + 100 * i;
+    m += `    <gml:featureMember>\n      <ms:${SONDE_C4.table}>\n        <ms:msGeometry><gml:Point srsName="EPSG:2154"><gml:coordinates>${x},${y}</gml:coordinates></gml:Point></ms:msGeometry>\n`
+      + `        <ms:nom>point d'essai n° ${i + 1}</ms:nom>\n      </ms:${SONDE_C4.table}>\n    </gml:featureMember>\n`;
+  }
+  if (n === 0) m = '   <gml:boundedBy>\n      <gml:null>missing</gml:null>\n   </gml:boundedBy>\n';
+  return `<?xml version='1.0' encoding="UTF-8" ?>\n<wfs:FeatureCollection xmlns:ms="http://mapserver.gis.umn.edu/mapserver" `
+    + `xmlns:wfs="http://www.opengis.net/wfs" xmlns:gml="http://www.opengis.net/gml">\n${m}</wfs:FeatureCollection>\n`;
+}
+
+export function sondeC4Gfs() {
+  return '<GMLFeatureClassList>\n  <GMLFeatureClass>\n'
+    + `    <Name>${SONDE_C4.table}</Name>\n    <ElementPath>${SONDE_C4.table}</ElementPath>\n`
+    + '    <GeometryName>msGeometry</GeometryName>\n    <GeometryElementPath>msGeometry</GeometryElementPath>\n'
+    + '    <GeometryType>1</GeometryType>\n    <SRSName>EPSG:2154</SRSName>\n'
+    + '    <PropertyDefn>\n      <Name>nom</Name>\n      <ElementPath>nom</ElementPath>\n      <Type>String</Type>\n    </PropertyDefn>\n'
+    + '  </GMLFeatureClass>\n</GMLFeatureClassList>\n';
+}
+
+function sondeC4Annexes(s, gpkg) {
+  const etat = (c) => { try { return s.existe(c) ? 'PRÉSENT' : 'absent'; } catch (e) { return 'illisible'; } };
+  return '-wal : ' + etat(gpkg + '-wal') + ', -shm : ' + etat(gpkg + '-shm');
+}
+
+function sondeC4Decrire(s, couche) {
+  const d = decrireCoucheCache({ creerIterateur: s.creerIterateur }, couche);
+  if (d.valide !== true) return 'INVALIDE';
+  return 'valide, ' + d.objets + (d.objets < 2 ? ' objet' : ' objets') + ', WKB ' + d.wkb + ', système ' + (d.systeme || 'inconnu');
+}
+
+// GML + .gfs écrits dans travail/, ouverts par le pilote GML, réécrits en GeoPackage `cible`. Rend '' ou la raison.
+function sondeC4EcrireGpkg(s, c, nomGml, n, dx, cible) {
+  const gml = c.travail + '/' + nomGml + '.gml';
+  if (s.ecrireFichier(gml, sondeC4Gml(n, dx)) !== true || s.ecrireFichier(c.travail + '/' + nomGml + '.gfs', sondeC4Gfs()) !== true) return 'écriture du GML refusée';
+  const g = s.ouvrir(gml + '|layername=' + SONDE_C4.table + '|option:EXPOSE_GML_ID=NO', SONDE_C4.table);
+  if (!g || g.isValid !== true) return 'GML illisible';
+  const r = String(s.reecrire(g, cible) || '');
+  return r === cible ? '' : 'GeoPackage non écrit (' + r + ')';
+}
+
+// Bouton 1 : A (2 objets) au chemin fixe, GeoPackage vide, A ajouté à la carte. s = { ecrireFichier, existe, ouvrir(uri, nom),
+// reecrire(couche, cible), creerIterateur, ajouter(couche) }. Rend { ok, lignes, couche }.
+export function sondeC4Preparer(dossierProjet, s) {
+  const lignes = ["Sonde C4 (outil d'essai, textes provisoires) : préparation"];
+  const fin = (ok, couche) => ({ ok: ok, lignes: lignes, couche: couche || null });
+  const c = sondeC4Chemins(dossierProjet);
+  if (c === null) { lignes.push('dossier du projet inconnu : sonde arrêtée'); return fin(false); }
+  try {
+    // A n'est ouvert QUE par la couche de la carte : une seconde couche sur le même fichier partagerait le jeu de données
+    // GDAL (pool de QGIS) et fausserait la relecture après bascule.
+    let e = sondeC4EcrireGpkg(s, c, 'a', 2, 0, c.actuel);
+    if (e !== '') { lignes.push('A (actuel) : ' + e); return fin(false); }
+    e = sondeC4EcrireGpkg(s, c, 'vide', 0, 0, c.vide);
+    if (e !== '') { lignes.push('vide : ' + e); return fin(false); }
+    lignes.push('vide : ' + sondeC4Decrire(s, s.ouvrir(c.vide + '|layername=' + SONDE_C4.table, 'sonde vide')) + ' (' + c.vide + ')');
+    const couche = s.ouvrir(c.actuel + '|layername=' + SONDE_C4.table, SONDE_C4.nom);
+    if (!couche || couche.isValid !== true) { lignes.push('A (actuel) : INVALIDE, couche de sonde non ajoutée'); return fin(false); }
+    lignes.push('A (actuel) : ' + sondeC4Decrire(s, couche) + ' (' + c.actuel + ')');
+    s.ajouter(couche);
+    lignes.push('couche de sonde ajoutée à la carte : « ' + SONDE_C4.nom + ' »');
+    lignes.push('annexes de A après ouverture : ' + sondeC4Annexes(s, c.actuel));
+    return fin(true, couche);
+  } catch (e) {
+    lignes.push('EXCEPTION : ' + texteException(e));
+    return fin(false);
+  }
+}
+
+// Bouton 2 : B (3 objets, 500 m à l'est) écrit, A mis de côté, B renommé au chemin de A, reload() de la couche de la carte ;
+// puis retour arrière (renommages inverses, reload). s = services de sondeC4Preparer + renommer(de, vers), recharger(couche),
+// maintenant() (ms). Rend { ok, lignes, apres, retour }.
+export function sondeC4Bascule(dossierProjet, s, couche) {
+  const lignes = ["Sonde C4 (outil d'essai, textes provisoires) : bascule et relecture"];
+  const r = { ok: false, lignes: lignes, apres: -1, retour: -1 };
+  const c = sondeC4Chemins(dossierProjet);
+  if (c === null || !couche) { lignes.push('aucune couche de sonde sur la carte : faire d\'abord « préparer et afficher »'); return r; }
+  const compter = () => compterObjets(couche, s.creerIterateur);
+  try {
+    const e = sondeC4EcrireGpkg(s, c, 'b', 3, 500, c.b);
+    if (e !== '') { lignes.push('B : ' + e); return r; }
+    lignes.push('B : 3 objets écrits (' + c.b + ') ; couche affichée avant : ' + compter() + ' objets');
+    lignes.push('avant la bascule : ' + sondeC4Annexes(s, c.actuel));
+    const t0 = s.maintenant();
+    if (s.renommer(c.actuel, c.sauvegarde) !== true) { lignes.push('bascule : renommage REFUSÉ (A vers sauvegarde)'); }
+    else if (s.renommer(c.b, c.actuel) !== true) {
+      lignes.push('bascule : renommage REFUSÉ (B vers le chemin de A)');
+      lignes.push('remise en place de A : ' + (s.renommer(c.sauvegarde, c.actuel) === true ? 'faite' : 'REFUSÉE'));
+    } else {
+      s.recharger(couche);
+      r.apres = compter();
+      lignes.push('bascule : renommages réussis, couche affichée relue : ' + r.apres + ' objets (attendu 3), ' + (s.maintenant() - t0) + ' ms');
+      lignes.push('couche après bascule : ' + sondeC4Decrire(s, couche));
+      lignes.push('après la bascule : ' + sondeC4Annexes(s, c.actuel));
+      const ok1 = s.renommer(c.actuel, c.b) === true;
+      const ok2 = ok1 && s.renommer(c.sauvegarde, c.actuel) === true;
+      s.recharger(couche);
+      r.retour = compter();
+      lignes.push('retour arrière : ' + (ok2 ? 'renommages réussis' : 'renommage REFUSÉ') + ', couche relue : ' + r.retour + ' objets (attendu 2)');
+      lignes.push('après le retour arrière : ' + sondeC4Annexes(s, c.actuel));
+    }
+    r.ok = r.apres === 3 && r.retour === 2;
+    lignes.push(r.ok ? 'VERDICT : bascule par renommage puis reload() PROUVÉE (3 objets, puis 2 au retour)' : 'VERDICT : bascule NON PROUVÉE');
+    return r;
+  } catch (e) {
+    lignes.push('EXCEPTION : ' + texteException(e));
+    lignes.push('VERDICT : bascule NON PROUVÉE');
+    return r;
+  }
+}
+// ==== sonde C4 : fin
