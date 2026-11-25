@@ -54,7 +54,8 @@ test('textes : ceux de la fiche (validés par Pascal le 25 novembre 2026), mot p
   assert.equal(L.TEXTES_CACHE_ONF.reponseIncomplete, f['Réponse incomplète'][0]);
   assert.equal(L.messageCacheReussi({ FOR_PUBL_FR: 4, PARC_PUBL_FR: 53, PRS_FR: 1 }, DATE), f['Réussite'][0]);
   assert.equal(L.messageTropDObjets('PARC_PUBL_FR'), f["Trop d'objets"][0]);
-  assert.deepEqual(L.CACHE_ONF.couches.map((c) => c.nom), f['Noms des couches']);
+  // Noms : remplacés par les arbitrages de Pascal sur le prototype (attribution « © ONF » dans le nom).
+  assert.deepEqual(L.CACHE_ONF.couches.map((c) => c.nom), arbitragesDuPrototype().noms);
   const entrees = L.CACHE_ONF.couches.map((c, i) => ({ cache: 'onf', couche: c.couche, chemin: `${H}/${c.couche}.gpkg`, date: DATE.toISOString(), objets: [4, 53, 1][i] }));
   assert.equal(L.cacheLignePanneau(entrees), f['Dans le panneau'][0]);
 });
@@ -67,10 +68,87 @@ test('textes : « Trop d\'objets » nomme la couche en cause ; nombres au singul
   assert.equal(L.cacheDateAffichee(new Date(2027, 0, 5)), '05/01/2027');
 });
 
-test('textes proposés (NON validés) : regroupés à part, jamais confondus avec les validés', () => {
-  const valides = Object.values(L.TEXTES_CACHE_ONF);
-  for (const t of Object.values(L.TEXTES_CACHE_ONF_PROPOSES)) assert.ok(!valides.includes(t));
-  assert.match(lire('plugin/vision-logique.mjs'), /TEXTES PROPOSÉS PAR LE DEV, NON VALIDÉS/);
+// Aller-retour 1/3 : textes ajoutés et noms validés par Pascal (fiche, « Arbitrages de Pascal sur le prototype »).
+function arbitragesDuPrototype() {
+  const fiche = lire('pilotage/missions/053-couches-onf-wfs.md');
+  const i = fiche.indexOf('**Arbitrages de Pascal sur le prototype');
+  assert.ok(i >= 0, 'arbitrages sur le prototype absents de la fiche');
+  const bloc = fiche.slice(i, fiche.indexOf('\n\n', i)).replace(/\n\s*/g, ' ');
+  const cites = [...bloc.matchAll(/« (.*?) »/g)].map((m) => m[1]);
+  return { cites, noms: cites.filter((c) => /\(© ONF\)$/.test(c)) };
+}
+
+test('textes ajoutés (aller-retour 1/3) : validés par Pascal, mot pour mot, rangés avec les autres', () => {
+  const { cites, noms } = arbitragesDuPrototype();
+  for (const k of ['echecLocal', 'horsFrance', 'cacheIllisible', 'positionIllisible']) {
+    assert.ok(cites.includes(L.TEXTES_CACHE_ONF[k]), `${k} : « ${L.TEXTES_CACHE_ONF[k]} » absent des arbitrages`);
+  }
+  assert.ok(cites.includes(L.messageZipReserve('_cache-onf.zip')));
+  assert.deepEqual(noms, ['Forêts publiques (© ONF)', 'Parcelles forestières (© ONF)', 'Points de rencontre des secours (© ONF)']);
+  assert.equal(L.TEXTES_CACHE_ONF_PROPOSES, undefined, 'plus de textes proposés en attente');
+  assert.ok(!/NON VALIDÉS/.test(lire('plugin/vision-logique.mjs')));
+});
+
+test('emprise illisible : « Position de la carte illisible… » ; hors de France : « Carte hors de France métropolitaine… »', () => {
+  assert.equal(L.cacheJugerEmprise(null, EMPRISE_VRAISEMBLANCE).message, L.TEXTES_CACHE_ONF.positionIllisible);
+  assert.equal(L.cacheJugerEmprise({ xmin: 5.5, ymin: 47.1, xmax: 5.6, ymax: 47.2 }, EMPRISE_VRAISEMBLANCE).message, L.TEXTES_CACHE_ONF.horsFrance);
+});
+
+test('B1 : couche du cache invalide à la réouverture : libererCouche (deleteLater) jamais appelé', () => {
+  const reglages = new Map([[L.cleRegistre(ID), JSON.stringify(entreesCache())]]);
+  const liberees = [];
+  const r = L.demarrerProjet({
+    variables: { vision_id: ID }, dossierProjet: PROJET, existe: () => true, chargerCouche: () => null,
+    reglages: { value: (k, d) => (reglages.has(k) ? reglages.get(k) : d), setValue: (k, v) => reglages.set(k, v) },
+    chargerCache: () => ({ isValid: false }), libererCouche: (l) => liberees.push(l), coucheDuProjet: () => false,
+  });
+  assert.deepEqual(r.cache.manquantes, ['FOR_PUBL_FR', 'PARC_PUBL_FR', 'PRS_FR']);
+  assert.deepEqual(liberees, []);
+});
+
+test('seuils (arbitrage sur le prototype) : parcelles et points visibles en deçà du 1:50 000, forêts toujours visibles', () => {
+  const entete = (x) => /<qgis [^>]*>/.exec(x)[0];
+  for (const c of ['PARC_PUBL_FR', 'PRS_FR']) {
+    assert.match(entete(STYLES_ONF[c]), / hasScaleBasedVisibilityFlag="1"/, c);
+    assert.match(entete(STYLES_ONF[c]), / minScale="50000"/, c);
+    assert.match(entete(STYLES_ONF[c]), / maxScale="0"/, c);
+  }
+  assert.match(entete(STYLES_ONF.FOR_PUBL_FR), / hasScaleBasedVisibilityFlag="0"/);
+  assert.equal(entete(STYLES_ONF.FOR_PUBL_FR), entete(source('FOR_PUBL_FR')));
+});
+
+test('changement de projet pendant le téléchargement : rien n\'est écrit, « Enregistrement du cache ONF impossible… »', () => {
+  const f = fauxQField();
+  f.ctx.depart = { visionId: ID, dossierProjet: '/sdcard/QField/autre' };
+  const r = L.cacheEnregistrer(f.ctx);
+  assert.equal(r.ok, false);
+  assert.equal(r.message, L.TEXTES_CACHE_ONF.echecLocal);
+  assert.equal(f.disque.size, 0);
+  const g = fauxQField();
+  g.ctx.depart = { visionId: ID, dossierProjet: PROJET };
+  assert.equal(L.cacheEnregistrer(g.ctx).ok, true);
+});
+
+test('registre illisible : le cache ne le remplace pas (seul l\'ajout d\'un zip le remplace, message d\'ouverture)', () => {
+  const f = fauxQField();
+  f.ctx.reglages.setValue(L.cleRegistre(ID), '{pas du json');
+  const r = L.cacheEnregistrer(f.ctx);
+  assert.equal(r.ok, false);
+  assert.equal(r.message, L.TEXTES_CACHE_ONF.echecLocal);
+  assert.equal(f.ctx.reglages.value(L.cleRegistre(ID), ''), '{pas du json');
+  assert.equal(f.carte.length, 0);
+});
+
+test('dossier réservé insensible à la casse (_CACHE-ONF.zip refusé)', () => {
+  assert.ok(L.estDossierReserve('_CACHE-ONF') && L.estDossierReserve('_Cache-Onf'));
+  const r = L.importerZip({ visionId: ID, nomZip: '_CACHE-ONF.zip', dossierProjet: PROJET, octets: new Uint8Array(0), reglages: { value: () => '', setValue: () => {} } });
+  assert.equal(r.message, L.messageZipReserve('_CACHE-ONF.zip'));
+});
+
+test('plugin/PLAN.md § 5 : appels du cache ONF inscrits', () => {
+  const plan = lire('plugin/PLAN.md');
+  const s5 = plan.slice(plan.indexOf('## 5.'), plan.indexOf('## 6.'));
+  for (const a of ['iface.createHttpRequest()', 'screenToCoordinate', 'EXPOSE_GML_ID=NO', 'couche.crs', 'wkbType()', 'vision/cache']) assert.ok(s5.includes(a), a);
 });
 
 // ------------------------------------------------------------------------------------------- constantes, emprise
@@ -121,6 +199,7 @@ test('emprise : plus de 20 km de côté refusée (jamais rognée), 20 km accept�
     assert.equal(r.message, L.TEXTES_CACHE_ONF.zoneTropGrande);
   }
   assert.equal(L.cacheJugerEmprise(null, EMPRISE_VRAISEMBLANCE).refus, 'illisible');
+  assert.equal(L.cacheJugerEmprise(null, EMPRISE_VRAISEMBLANCE).message, L.TEXTES_CACHE_ONF.positionIllisible);
   // Une emprise en degrés (carte en WGS84 non reprojetée) n'est pas en France en Lambert 93.
   assert.equal(L.cacheJugerEmprise({ xmin: 5.5, ymin: 47.1, xmax: 5.6, ymax: 47.2 }, EMPRISE_VRAISEMBLANCE).refus, 'hors-france');
 });
@@ -137,7 +216,7 @@ test('préparation : projet Vision et dossier sains, emprise jugée, génératio
   assert.equal(p.ok, true);
   assert.match(p.horodatage, /^\d{8}T\d{6}Z$/);
   assert.equal(L.cacheHorodatage(new Date(Date.UTC(2026, 10, 25, 9, 5, 7))), '20261125T090507Z');
-  assert.equal(L.cachePreparer({ visionId: 'x', dossierProjet: PROJET, emprise: ZONE }).message, L.TEXTES_CACHE_ONF_PROPOSES.echecLocal);
+  assert.equal(L.cachePreparer({ visionId: 'x', dossierProjet: PROJET, emprise: ZONE }).message, L.TEXTES_CACHE_ONF.echecLocal);
   assert.equal(L.cachePreparer({ visionId: ID, dossierProjet: PROJET, emprise: { xmin: 0, ymin: 0, xmax: 30000, ymax: 1 }, vraisemblance: EMPRISE_VRAISEMBLANCE }).message,
     L.TEXTES_CACHE_ONF.zoneTropGrande);
 });
@@ -451,7 +530,7 @@ for (const [nom, panne] of [
     };
     const r = L.cacheEnregistrer(f.ctx);
     assert.equal(r.ok, false);
-    assert.equal(r.message, L.TEXTES_CACHE_ONF_PROPOSES.echecLocal);
+    assert.equal(r.message, L.TEXTES_CACHE_ONF.echecLocal);
     assert.equal(JSON.stringify(f.registre()), avant, 'registre inchangé');
     assert.deepEqual(f.carte, carteAvant, 'carte inchangée');
     for (const k of f.disque.keys()) assert.ok(!k.includes(`/${H2}/`), 'nouvelle génération effacée : ' + k);
@@ -520,7 +599,7 @@ test('réouverture : source du GeoPackage du cache, couche en lecture seule', ()
 test('réouverture : fichier du cache absent ou illisible : dit (texte proposé), jamais en silence ; entrée gardée', () => {
   const { r, registre } = demarrer(entreesCache(), { fichiers: new Set([`${CACHE}/${H}/FOR_PUBL_FR.gpkg`, `${CACHE}/${H}/PARC_PUBL_FR.gpkg`]) });
   assert.deepEqual(r.cache.manquantes, ['PRS_FR']);
-  assert.match(r.message, new RegExp(L.TEXTES_CACHE_ONF_PROPOSES.cacheIllisible.replace(/[().]/g, '\\$&')));
+  assert.match(r.message, new RegExp(L.TEXTES_CACHE_ONF.cacheIllisible.replace(/[().]/g, '\\$&')));
   assert.equal(registre().length, 3);
 });
 
@@ -601,11 +680,14 @@ function lignesChangees(a, b) {
   return x.map((l, i) => [l, y[i]]).filter(([l, m]) => l !== m);
 }
 
-test('styles : forêts étiquetées par iidtn_frt, parcelles par ccod_prf ; une seule ligne change, symboles, couleurs et seuils gardés', () => {
+// Seuil de visibilité de la couche (aller-retour 1/3) : seul l'en-tête <qgis …> des parcelles et des points change en plus.
+const seuil = (x) => x.replace(' hasScaleBasedVisibilityFlag="1"', ' hasScaleBasedVisibilityFlag="0"').replace(' minScale="50000"', ' minScale="100000000"');
+
+test('styles : forêts étiquetées par iidtn_frt, parcelles par ccod_prf ; seules ces lignes et le seuil changent, symboles, couleurs et seuils d\'étiquettes gardés', () => {
   const frt = lignesChangees(source('FOR_PUBL_FR'), STYLES_ONF.FOR_PUBL_FR);
   assert.equal(frt.length, 1);
   assert.equal(frt[0][0].replace('fieldName="CCOD_FRT"', 'fieldName="iidtn_frt"'), frt[0][1]);
-  const parc = lignesChangees(source('PARC_PUBL_FR'), STYLES_ONF.PARC_PUBL_FR);
+  const parc = lignesChangees(source('PARC_PUBL_FR'), seuil(STYLES_ONF.PARC_PUBL_FR));
   assert.equal(parc.length, 1);
   assert.equal(parc[0][0].replace('fieldName="CCOD_PRF"', 'fieldName="ccod_prf"'), parc[0][1]);
   // Seuils : étiquettes des forêts au-delà du 1:50 000, des parcelles en deçà (inchangés).
@@ -625,7 +707,7 @@ test('styles : formulaire des points sur les 13 champs réels (mêmes réglages)
   for (const ancien of ['desc_prsf', 'code_prsf', 'nom_com', 'gid', 'gestionnaire']) assert.ok(!t.includes(`"${ancien}"`), ancien);
   const rendu = (x) => x.slice(x.indexOf('<renderer-v2'), x.indexOf('</renderer-v2>'));
   assert.equal(rendu(t), rendu(s), 'symbole (carré rouge, flèches arrows/Arrow_01.svg) inchangé');
-  assert.equal(t.slice(0, t.indexOf('\n', 100)), s.slice(0, s.indexOf('\n', 100)), 'en-tête (seuils de visibilité) inchangé');
+  assert.equal(seuil(t.slice(0, t.indexOf('\n', 100))), s.slice(0, s.indexOf('\n', 100)), 'en-tête : seul le seuil de visibilité change');
   assert.match(t, /arrows\/Arrow_01\.svg/);
 });
 

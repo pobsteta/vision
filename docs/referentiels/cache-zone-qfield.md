@@ -432,6 +432,17 @@ pure `plugin/vision-logique.mjs`, section « cache ONF », testée par `tests/ca
    affiché et inscrit.
 5. Le panneau affiche « Cache ONF du JJ/MM/AAAA : … » ; à la réouverture du projet (sans réseau), les trois GeoPackage sont
    rechargés depuis le disque, après les couches des zips (donc en tête de liste), et leur `.qml` s'applique (ADR 0008).
+   Le fond embarqué (`basemap.mbtiles`, mission 048), chargé ensuite, se range lui-même (placement optimal de QGIS) : il peut
+   passer au-dessus du cache dans la liste ; noté, non traité ici.
+
+**Aller-retour 1/3 (arbitrages de Pascal sur le prototype, fiche 053)** : noms des couches « Forêts publiques (© ONF) »,
+« Parcelles forestières (© ONF) », « Points de rencontre des secours (© ONF) » (attribution dans le nom, § 12) ; parcelles et
+points visibles seulement en deçà du 1:50 000 : seuil posé dans l'en-tête `<qgis>` des styles adaptés
+(`hasScaleBasedVisibilityFlag="1"`, `minScale="50000"`, `maxScale="0"`), appliqué par QGIS avec le `.qml` voisin, à la création
+comme à la réouverture ; forêts toujours visibles ; textes ajoutés validés ; garde si le projet change pendant le
+téléchargement ; registre illisible : le cache refuse (« Enregistrement du cache ONF impossible… ») au lieu de le remplacer ;
+couche du cache invalide à la réouverture jamais passée à `libererCouche` (`deleteLater`) ; plugin en 0.7.0. Source OGR :
+options lues par `analyzeURI` (`QG src/core/providers/ogr/qgsogrprovider.cpp` l. 434), puis ouverture l. 206-210.
 
 **Lu dans le code, non essayé sur l'appareil** : `screenToCoordinate` depuis un plugin ; l'option `|option:EXPOSE_GML_ID=NO`
 dans une source OGR de QGIS ; la lecture du `.gfs` voisin par le GDAL du paquet Android (3.12.4 ; essayée avec GDAL 3.8.4
@@ -452,7 +463,7 @@ par « Install plugin from URL », ouvrir `vision.qgz`.
 
 | N° | Geste | Attendu | Si autre chose |
 |---|---|---|---|
-| 1 | Avec réseau, carte zoomée sur la forêt (moins de 20 km de côté), bouton Vision, « Mettre en cache les couches ONF de cette zone » | « Téléchargement des couches ONF… », puis « Couches ONF en cache : n forêts, n parcelles, n points de rencontre (zone du JJ/MM/AAAA). » ; trois couches en tête de liste, aux styles de Pascal (contour cyan et étiquette `iidtn_frt` au-delà du 1:50 000 ; parcelles orange, étiquette `ccod_prf` en deçà ; carré rouge et flèches des points) ; ligne « Cache ONF du … » dans le panneau | noter le message et faire une capture ; flèches absentes : le signaler |
+| 1 | Avec réseau, carte zoomée sur la forêt (moins de 20 km de côté), bouton Vision, « Mettre en cache les couches ONF de cette zone » | « Téléchargement des couches ONF… », puis « Couches ONF en cache : n forêts, n parcelles, n points de rencontre (zone du JJ/MM/AAAA). » ; trois couches en tête de liste, « Forêts publiques (© ONF) », « Parcelles forestières (© ONF) », « Points de rencontre des secours (© ONF) », aux styles de Pascal (contour cyan et étiquette `iidtn_frt` au-delà du 1:50 000 ; parcelles orange, étiquette `ccod_prf` en deçà ; carré rouge et flèches des points) ; parcelles et points invisibles au-delà du 1:50 000, forêts toujours visibles ; ligne « Cache ONF du … » dans le panneau | noter le message et faire une capture ; flèches absentes : le signaler |
 | 2 | Toucher une parcelle et un point de rencontre | formulaire lisible, accents justes ; contour d'une forêt connue sur le fond IGN à moins de 5 m | capture |
 | 3 | **Mode avion**, fermer puis rouvrir `vision.qgz` (**réouverture**) | les trois couches reviennent, mêmes styles, même ligne « Cache ONF du … » | message affiché à l'ouverture |
 | 4 | Toujours en mode avion, bouton du cache | « Pas de réseau : le cache ONF n'est pas mis à jour, l'ancien est gardé. » ; l'ancien cache reste affiché | capture |
@@ -467,9 +478,12 @@ par « Install plugin from URL », ouvrir `vision.qgz`.
 QField affiche les crédits d'une couche à partir de `layer->metadata().rights()` (`QF src/core/qflayertreemodel.cpp`
 l. 1118-1138). Aucune voie lue ne permet au plugin d'y écrire « © ONF » :
 
-- `metadata` est une `Q_PROPERTY` de `QgsMapLayer` (`QG src/core/qgsmaplayer.h` l. 89), mais `QgsLayerMetadata` est un
+- `metadata` est une `Q_PROPERTY` **en écriture** de `QgsMapLayer` (`READ metadata WRITE setMetadata`, `QG src/core/qgsmaplayer.h`
+  l. 89 de ce clone ; l. 88 selon la relecture), mais `QgsLayerMetadata` est un
   `Q_GADGET` dont `rights` est en **lecture seule** (`QG src/core/metadata/qgslayermetadata.h` l. 57-60), sans méthode
-  invocable : QML ne peut ni le modifier ni en fabriquer un ;
+  invocable : QML ne peut ni modifier les droits d'un objet de métadonnées ni en fabriquer un. **Voie (d), non examinée** (correction
+  de la relecture) : recopier par `couche.metadata = autre.metadata` les métadonnées d'une couche qui porte déjà
+  `<rights>© ONF</rights>` (par exemple une couche WFS de `vision.qgz` à l'étape 2) ; à lire et essayer à l'étape 2 ;
 - `setAttribution` et `serverProperties()` ne sont ni `Q_INVOKABLE` ni propriétés (`qgsmaplayer.h` l. 414-445) ;
 - un `.qmd` voisin n'est pas lu au chargement (`loadDefaultMetadata` n'est appelé par aucun code du cœur lu ; `qgsmaplayer.cpp`
   l. 1517-1521) ; le fournisseur OGR ne lit les métadonnées d'un GeoPackage que dans sa table `gpkg_metadata`
@@ -480,7 +494,8 @@ l. 1118-1138). Aucune voie lue ne permet au plugin d'y écrire « © ONF » :
 Options, à trancher : (a) l'attribution `<rights>© ONF</rights>` sur les couches WFS de `vision.qgz` à l'étape 2 (comme les
 fonds, `outils/projet-modele.mjs` l. 106-111), et pour le cache la voie C4 (§ 1.4 : couches GeoPackage déclarées dans
 `vision.qgz`, qui portent leurs métadonnées) ; (b) un texte « © ONF » dans le panneau, à côté de la ligne « Cache ONF du … »
-(texte à valider) ; (c) « © ONF » dans le nom des couches (noms validés à changer).
+(texte à valider) ; (c) « © ONF » dans le nom des couches. **Tranché par Pascal (arbitrages sur le prototype) : (c)**, en
+place depuis l'aller-retour 1/3.
 
 ## 13. À écrire à l'étape 2 (spec § 3.3 ou nouveau § 3.6, README), non fait ici
 

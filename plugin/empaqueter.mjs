@@ -45,7 +45,8 @@ ${lignes.join('\n')}
 // les trois .qml fournis par Pascal (docs/referentiels/brut/onf/, jamais modifiés). Seuls changent : l'étiquette des forêts
 // (CCOD_FRT, absent du service, devient iidtn_frt), la casse de l'étiquette des parcelles (ccod_prf), et la description
 // des champs des points de rencontre (formulaire : les 13 champs réels, mêmes réglages pour chacun ; aperçu desc_prsf ->
-// llib_prs ; champ de durée du temporel, désactivé, lat -> qlat_prs). Symboles, couleurs et seuils inchangés.
+// llib_prs ; champ de durée du temporel, désactivé, lat -> qlat_prs) ; et le seuil de visibilité des parcelles et des
+// points (en deçà du 1:50 000, arbitrage de Pascal sur le prototype). Symboles, couleurs et seuils d'étiquettes inchangés.
 // Module versionné comme la bibliothèque (tests/cache-onf-053.test.mjs le compare). Régénérer : node plugin/empaqueter.mjs --styles-onf
 const ONF = join(ici, '..', 'docs', 'referentiels', 'brut', 'onf');
 export const SOURCES_STYLES_ONF = { FOR_PUBL_FR: 'RDF_FRT.qml', PARC_PUBL_FR: 'RDF_Parc.qml', PRS_FR: 'Point_de_rencontre_des_secours_en_frt.qml' };
@@ -107,7 +108,7 @@ function refaireSection(texte, balise, anciens, nouveaux) {
 
 export function adapterStyleOnf(couche, texte) {
   if (couche === 'FOR_PUBL_FR') return remplacerUneFois(texte, 'fieldName="CCOD_FRT"', 'fieldName="iidtn_frt"');
-  if (couche === 'PARC_PUBL_FR') return remplacerUneFois(texte, 'fieldName="CCOD_PRF"', 'fieldName="ccod_prf"');
+  if (couche === 'PARC_PUBL_FR') return seuilDeVisibilite(remplacerUneFois(texte, 'fieldName="CCOD_PRF"', 'fieldName="ccod_prf"'));
   if (couche !== 'PRS_FR') throw new Error('style ONF : couche inconnue ' + couche);
   const nouveaux = CACHE_ONF.couches.filter((c) => c.couche === 'PRS_FR')[0].champs;
   let t = texte;
@@ -115,7 +116,20 @@ export function adapterStyleOnf(couche, texte) {
   t = remplacerUneFois(t, '<previewExpression>"desc_prsf"</previewExpression>', '<previewExpression>"llib_prs"</previewExpression>');
   t = remplacerUneFois(t, 'durationField="lat"', 'durationField="qlat_prs"');
   for (const f of CHAMPS_PRS_DU_STYLE) if (t.includes(`"${f}"`)) throw new Error(`style ONF : champ ${f} encore cité`);
-  return t;
+  return seuilDeVisibilite(t);
+}
+
+// Arbitrage de Pascal sur le prototype (fiche 053) : parcelles et points visibles seulement en deçà du 1:50 000 (arbitrage
+// n° 2). Posé dans l'en-tête <qgis> du style (catégorie Rendering : hasScaleBasedVisibilityFlag, minScale = plus petite
+// échelle visible), que QGIS applique en chargeant le .qml voisin du GeoPackage (ADR 0008), à la création comme à la
+// réouverture. Aucune API de seuil n'est appelée depuis QML. Les forêts restent toujours visibles (en-tête inchangé).
+function seuilDeVisibilite(texte) {
+  const entete = /<qgis [^>]*>/.exec(texte);
+  if (!entete) throw new Error('style ONF : en-tête <qgis> absent');
+  let e = remplacerUneFois(entete[0], ' hasScaleBasedVisibilityFlag="0"', ' hasScaleBasedVisibilityFlag="1"');
+  e = remplacerUneFois(e, ' minScale="100000000"', ' minScale="50000"');
+  if (!/ maxScale="0"/.test(e)) throw new Error('style ONF : maxScale="0" attendu');
+  return texte.replace(entete[0], () => e);
 }
 
 export function genererStylesOnf() {

@@ -607,7 +607,7 @@ Item {
       req.open("GET", url);
       req.send();
     } catch (e) {
-      cacheFin(Logique.TEXTES_CACHE_ONF_PROPOSES.echecLocal);
+      cacheFin(Logique.TEXTES_CACHE_ONF.echecLocal);
     }
   }
 
@@ -617,7 +617,7 @@ Item {
       if (!j.ok) { cacheFin(j.message); return; }
       reponses[couche] = { texte: r.texte, nbObjets: j.nbObjets };
     } catch (e) {
-      cacheFin(Logique.TEXTES_CACHE_ONF_PROPOSES.echecLocal);
+      cacheFin(Logique.TEXTES_CACHE_ONF.echecLocal);
       return;
     }
     cacheRequete(i + 1, prep, reponses);
@@ -630,6 +630,8 @@ Item {
       reglages: reglages,
       horodatage: prep.horodatage,
       date: prep.date,
+      // Garde : le projet ouvert doit être celui du bouton (comme zipRecu).
+      depart: { visionId: prep.visionId, dossierProjet: prep.dossierProjet },
       emprise: prep.emprise,
       reponses: reponses,
       styles: StylesOnf.STYLES_ONF,

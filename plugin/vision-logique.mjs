@@ -12,7 +12,7 @@
 // Aucune fonction ne touche QField : tout passe par les objets reçus (réglages, chargerCouche,
 // existe, platformUtilities), que Vision.qml branche sur l'API de QField (plugin/PLAN.md § 5).
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.7.0';
 
 // Mission 038 : comptage des entités par itérateur. Dans QGIS 3a92eb3, `featureCount()` (qgsvectorlayer.h l. 1701,
 // `long long featureCount() const final;`) n'est ni Q_PROPERTY ni Q_INVOKABLE : QML ne peut pas l'appeler. QField v4.3.7
@@ -1395,7 +1395,7 @@ export function demarrerProjet(ctx) {
     if (!estSourceRaster(source)) r.couche.readOnly = true;
     rechargees.push({ zip: e.zip, couche: e.couche });
   }
-  const cache = rechargerCacheOnf(ctx, dossier, entreesCache, liberer);
+  const cache = rechargerCacheOnf(ctx, dossier, entreesCache);
   const fondEmbarque = chargerFondEmbarque(ctx, ctx.dossierProjet);
   const lignes = [];
   if (etat.illisible) lignes.push("registre illisible : il sera remplacé au prochain ajout d'un zip");
@@ -1420,7 +1420,7 @@ export function demarrerProjet(ctx) {
       : `${illisibles.length} couches n'ont pas pu être rechargées : illisibles (${nomsDe(illisibles)})`);
   }
   if (fondEmbarque === 'illisible') lignes.push(MESSAGE_FOND_ILLISIBLE);
-  if (cache.manquantes.length > 0) lignes.push(TEXTES_CACHE_ONF_PROPOSES.cacheIllisible);
+  if (cache.manquantes.length > 0) lignes.push(TEXTES_CACHE_ONF.cacheIllisible);
   return {
     actif: true, boutonVisible: true, visionId, rechargees, absentes, illisibles, douteuses, fondEmbarque, cache,
     message: lignes.join('\n'),
@@ -1516,44 +1516,42 @@ export const CACHE_ONF = {
   // Champs : DescribeFeatureType de la mesure n° 1 (docs/referentiels/brut/onf/mesure-2026-11-25.md), tous String.
   // wkb : Qgis::WkbType (QGIS 3a92eb3) et type OGR du .gfs : 6 MultiPolygon, 1 Point.
   couches: [
-    { couche: 'FOR_PUBL_FR', nom: 'Forêts publiques (ONF)', wkb: 6, un: 'forêt', plusieurs: 'forêts',
+    { couche: 'FOR_PUBL_FR', nom: 'Forêts publiques (© ONF)', wkb: 6, un: 'forêt', plusieurs: 'forêts',
       champs: ['iidtn_frt', 'llib_frt', 'cdom_frt', 'cinse_dep'] },
-    { couche: 'PARC_PUBL_FR', nom: 'Parcelles forestières (ONF)', wkb: 6, un: 'parcelle', plusieurs: 'parcelles',
+    { couche: 'PARC_PUBL_FR', nom: 'Parcelles forestières (© ONF)', wkb: 6, un: 'parcelle', plusieurs: 'parcelles',
       champs: ['iidtn_frt', 'llib_frt', 'ccod_prf'] },
-    { couche: 'PRS_FR', nom: 'Points de rencontre des secours (ONF)', wkb: 1, un: 'point de rencontre', plusieurs: 'points de rencontre',
+    { couche: 'PRS_FR', nom: 'Points de rencontre des secours (© ONF)', wkb: 1, un: 'point de rencontre', plusieurs: 'points de rencontre',
       champs: ['iidtn_prs', 'cinse_dep', 'loff_prs', 'cdfci_prs', 'ccod_cmat', 'ccod_ctps', 'llib_prs', 'lobs_prs', 'qlat_prs',
         'qlon_prs', 'qdis_prs', 'llib_com', 'cinse_com'] },
   ],
 };
 
-// Textes validés par Pascal le 25 novembre 2026 (« Je valide », fiche 053), mot pour mot ; nombres et date remplis ici.
+// Textes validés par Pascal le 25 novembre 2026 (« Je valide », fiche 053 ; puis « Arbitrages de Pascal sur le prototype »,
+// aller-retour 1/3), mot pour mot ; nombres et date remplis ici. Noms des couches : CACHE_ONF.couches (attribution « © ONF »
+// dans le nom : le plugin ne peut pas poser les droits de la couche, cache-zone-qfield.md § 12).
 export const TEXTES_CACHE_ONF = {
   bouton: 'Mettre en cache les couches ONF de cette zone',
   pendant: 'Téléchargement des couches ONF…',
   zoneTropGrande: 'Zone trop grande (plus de 20 km de côté) : zoomez, puis recommencez.',
   pasDeReseau: "Pas de réseau : le cache ONF n'est pas mis à jour, l'ancien est gardé.",
   reponseIncomplete: "Réponse incomplète du service ONF : le cache n'est pas mis à jour, l'ancien est gardé.",
-};
-
-// TEXTES PROPOSÉS PAR LE DEV, NON VALIDÉS par Pascal (cas que les textes validés ne couvrent pas) : à soumettre avant toute
-// publication hors préversion ; un seul endroit à changer. Voir le rendu de l'étape 1 ter.
-export const TEXTES_CACHE_ONF_PROPOSES = {
-  // Écriture ou relecture du GML ou du GeoPackage refusée, nombre d'objets relus différent, système ou type faux, dossier
-  // du projet inconnu : rien d'autre que l'appareil n'est en cause.
+  // Écriture ou relecture refusée, contrôle raté, projet changé pendant le téléchargement, registre illisible.
   echecLocal: "Enregistrement du cache ONF impossible : le cache n'est pas mis à jour, l'ancien est gardé.",
-  // Emprise de la carte illisible, ou hors de France métropolitaine en Lambert 93.
+  // Emprise hors de France métropolitaine en Lambert 93.
   horsFrance: "Carte hors de France métropolitaine : le cache ONF n'est pas mis à jour, l'ancien est gardé.",
+  // Emprise de la carte illisible.
+  positionIllisible: "Position de la carte illisible : le cache ONF n'est pas mis à jour, l'ancien est gardé.",
   // À la réouverture : une couche du cache absente ou illisible sur l'appareil.
   cacheIllisible: "Cache ONF illisible : il n'est pas affiché ; remettez-le en cache avec réseau.",
 };
 
 export function messageZipReserve(nomZip) {
-  // Texte proposé, NON VALIDÉ (garde R2, point 5).
   return `${nomZip} : nom réservé par Vision (cache ONF), rien n'est importé.`;
 }
 
+// Insensible à la casse : la mémoire partagée d'Android ne distingue pas toujours « _CACHE-ONF » de « _cache-onf ».
 export function estDossierReserve(nom) {
-  return String(nom) === CACHE_ONF.dossier;
+  return String(nom).toLowerCase() === CACHE_ONF.dossier;
 }
 
 export function coucheOnf(couche) {
@@ -1697,14 +1695,14 @@ export function cacheEmpriseDesPoints(points) {
 // si plus de 20 km de côté ; refusée si illisible ou hors de l'emprise de vraisemblance de la France métropolitaine.
 // Rend { ok, emprise, refus: '' | 'illisible' | 'trop-grande' | 'hors-france', message }.
 export function cacheJugerEmprise(e, vraisemblance) {
-  if (!empriseFinie(e)) return { ok: false, emprise: null, refus: 'illisible', message: TEXTES_CACHE_ONF_PROPOSES.horsFrance };
+  if (!empriseFinie(e)) return { ok: false, emprise: null, refus: 'illisible', message: TEXTES_CACHE_ONF.positionIllisible };
   const r = { xmin: Number(e.xmin), ymin: Number(e.ymin), xmax: Number(e.xmax), ymax: Number(e.ymax) };
   if (r.xmax - r.xmin > CACHE_ONF.coteMax || r.ymax - r.ymin > CACHE_ONF.coteMax) {
     return { ok: false, emprise: null, refus: 'trop-grande', message: TEXTES_CACHE_ONF.zoneTropGrande };
   }
   const v = vraisemblance;
   if (!v || r.xmin < v.xmin || r.xmax > v.xmax || r.ymin < v.ymin || r.ymax > v.ymax) {
-    return { ok: false, emprise: null, refus: 'hors-france', message: TEXTES_CACHE_ONF_PROPOSES.horsFrance };
+    return { ok: false, emprise: null, refus: 'hors-france', message: TEXTES_CACHE_ONF.horsFrance };
   }
   return { ok: true, emprise: r, refus: '', message: '' };
 }
@@ -1786,7 +1784,8 @@ export function cacheGfs(couche, elementGeometrie) {
 // tout schéma XSD distant, s'il n'est pas plus ancien que le GML (ogrgmldatasource.cpp l. 861-886 de GDAL 3.12.4). L'option
 // GFS_TEMPLATE n'est PAS employée : elle fait rechercher dans le GML les couches présentes (PrescanForTemplate, l. 849-857),
 // et une réponse sans objet ne s'ouvre plus (essai GDAL 3.8.4, tests/cache-onf-053.test.mjs). Option d'ouverture passée par
-// « |option: » (QGIS 3a92eb3, qgsogrprovidermetadata.cpp l. 228-270, qgsogrprovider.cpp l. 206-210) : EXPOSE_GML_ID=NO
+// « |option: » (QGIS 3a92eb3, qgsogrprovidermetadata.cpp l. 228-270 ; qgsogrprovider.cpp l. 434, analyzeURI, puis l. 206-210)
+// : EXPOSE_GML_ID=NO
 // (sans elle, gml_id est ajouté à toute réponse WFS, ogrgmldatasource.cpp l. 520 et 567-571).
 export function cacheSourceGml(chemins, couche) {
   return chemins.gml + '|layername=' + couche + '|option:EXPOSE_GML_ID=NO';
@@ -1811,11 +1810,11 @@ export function compterObjets(couche, creerIterateur) {
 // maintenant }. Rend { ok, message, emprise, horodatage, date }.
 export function cachePreparer(ctx) {
   const refus = (m) => ({ ok: false, message: m, emprise: null, horodatage: '', date: null });
-  if (!ctx || !estUuid(ctx.visionId) || cacheDossier(ctx.dossierProjet) === '') return refus(TEXTES_CACHE_ONF_PROPOSES.echecLocal);
+  if (!ctx || !estUuid(ctx.visionId) || cacheDossier(ctx.dossierProjet) === '') return refus(TEXTES_CACHE_ONF.echecLocal);
   const j = cacheJugerEmprise(ctx.emprise, ctx.vraisemblance);
   if (!j.ok) return refus(j.message);
   const date = typeof ctx.maintenant === 'function' ? ctx.maintenant() : new Date();
-  return { ok: true, message: '', emprise: j.emprise, horodatage: cacheHorodatage(date), date: date };
+  return { ok: true, message: '', emprise: j.emprise, horodatage: cacheHorodatage(date), date: date, visionId: ctx.visionId, dossierProjet: ctx.dossierProjet };
 }
 
 // Efface les fichiers d'une génération (toutes les couches), sous la garde peutToucherCache. Ne lève jamais.
@@ -1907,9 +1906,14 @@ function enregistrerCouche(ctx, c, reponse, horodatage) {
 // Les trois couches sont écrites dans une NOUVELLE génération et contrôlées ; seulement si les trois passent : l'ancien cache
 // quitte la carte, le nouveau y entre (en tête de liste, lecture seule), le registre est remplacé, l'ancienne génération est
 // effacée. Sinon la nouvelle génération est effacée, l'ancien cache reste affiché et inscrit. Rend { ok, message, compte, raison }.
+// `ctx.depart` (facultatif) : { visionId, dossierProjet } au moment du bouton ; un autre projet ouvert pendant le
+// téléchargement fait tout refuser (même garde que zipRecu dans Vision.qml). Registre illisible : refus, il n'est pas
+// remplacé par le cache (seul l'ajout d'un zip le remplace, comme le dit le message d'ouverture de demarrerProjet).
 export function cacheEnregistrer(ctx) {
-  const echec = (raison) => ({ ok: false, message: TEXTES_CACHE_ONF_PROPOSES.echecLocal, compte: null, raison: raison });
+  const echec = (raison) => ({ ok: false, message: TEXTES_CACHE_ONF.echecLocal, compte: null, raison: raison });
   if (!ctx || !estUuid(ctx.visionId) || cacheDossier(ctx.dossierProjet) === '' || !MOTIF_HORODATAGE.test(String(ctx.horodatage))) return echec('contexte');
+  if (ctx.depart && (ctx.depart.visionId !== ctx.visionId || ctx.depart.dossierProjet !== ctx.dossierProjet)) return echec('projet changé pendant le téléchargement');
+  if (etatRegistre(ctx.reglages, ctx.visionId).illisible) return echec('registre illisible');
   for (const s of ['ecrireFichier', 'effacerFichier', 'ouvrirCouche', 'creerIterateur', 'imposerSysteme', 'reecrireCouche', 'retirerCacheDeLaCarte', 'ajouterCache']) {
     if (typeof ctx[s] !== 'function') return echec('service absent : ' + s);
   }
@@ -1957,7 +1961,9 @@ export function cacheEnregistrer(ctx) {
 // Réouverture du projet : couches du cache rechargées depuis le disque (sans réseau), marquées par ctx.chargerCache(source,
 // nomAffiche, couche) (Vision.qml), en lecture seule ; son .qml voisin est appliqué par QGIS au chargement (ADR 0008).
 // Sans ctx.chargerCache : rien n'est chargé. Rend { rechargees, manquantes } (noms des couches du service).
-function rechargerCacheOnf(ctx, dossier, entrees, liberer) {
+// Une couche invalide n'est PAS libérée (aucun `liberer` passé) : libererCouche appelle deleteLater, que Qt 6.10.3 cache à
+// QML (cache-zone-qfield.md § 10) ; elle reste en mémoire jusqu'à la fermeture de QField.
+function rechargerCacheOnf(ctx, dossier, entrees) {
   const bilan = { rechargees: [], manquantes: [] };
   if (typeof ctx.chargerCache !== 'function' || entrees.length === 0) return bilan;
   for (let i = 0; i < entrees.length; i++) {
@@ -1967,7 +1973,7 @@ function rechargerCacheOnf(ctx, dossier, entrees, liberer) {
     let present = false;
     try { present = !!ctx.existe(chemin); } catch (x) { present = false; }
     if (!present) { bilan.manquantes.push(e.couche); continue; }
-    const r = chargerSansPlanter(function (s, n) { return ctx.chargerCache(s, n, e.couche); }, chemin + '|layername=' + e.couche, c.nom, undefined, liberer);
+    const r = chargerSansPlanter(function (s, n) { return ctx.chargerCache(s, n, e.couche); }, chemin + '|layername=' + e.couche, c.nom);
     if (!r.couche) { bilan.manquantes.push(e.couche); continue; }
     try { r.couche.readOnly = true; } catch (x) { /* propriété de QgsVectorLayer */ }
     bilan.rechargees.push(e.couche);
