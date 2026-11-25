@@ -31,7 +31,10 @@
 
 ## Arbitrages de Pascal (25 novembre 2026)
 
-1. **Copie locale et WFS** : une copie embarquée sert sans réseau, le WFS avec réseau.
+1. ~~**Copie locale et WFS** : une copie embarquée sert sans réseau, le WFS avec réseau.~~ **Remplacé le
+   25 novembre 2026** (Pascal, « oui je valide ») par le **cache de zone sur le mobile** : avec réseau, l'agent
+   cadre sa zone et le plugin enregistre en GeoPackage, dans `vision-imports/`, les objets des trois couches
+   sur cette emprise ; sans réseau, ce cache s'affiche et revient à la réouverture. Plus de copie nationale.
 2. **Affichage** : groupe « ONF » sous la couche « Saisie terrain », au-dessus des fonds ; requêtes WFS
    limitées à l'emprise visible ; Forêts cochée ; Parcelles et Points de secours cochés mais visibles
    seulement en deçà du 1:50 000.
@@ -58,31 +61,42 @@ Un workflow `workflow_dispatch` (`.github/workflows/mesure-wfs-onf.yml`) et un o
 
 **Ne doit pas :** toucher à `vision.qgz`, au plugin ou aux zips publiés ; trancher quoi que ce soit.
 
-### Arbitrage de Pascal attendu après l'étape 1
+### Étape 1 bis — `dev` : prototype du cache de zone (preuve avant code)
 
-Selon les poids mesurés : copie de toute la métropole dans `projet-vision.zip`, ou copie séparée
-(fichier à part, par direction territoriale ou agence), rythme de mise à jour, nom du fichier
-(proposition : `onf.gpkg`, trois tables), et sort des étiquettes si un champ manque.
+Ouverte le 25 novembre 2026 après le choix du cache de zone. **Preuve d'abord, dans le code de QField
+4.3.7 (et de QGIS qu'il embarque), avec fichiers et lignes cités**, avant toute ligne de plugin :
 
-### Étape 2 — `dev` : projet modèle (après l'arbitrage)
+- comment un plugin QML peut obtenir les objets d'une couche WFS sur une emprise (couche WFS du projet
+  filtrée par l'emprise de la carte, requête `GetFeature` + `BBOX` par `XMLHttpRequest` puis chargement,
+  ou autre voie), et les **écrire en GeoPackage** dans `vision-imports/` (fonction déjà utilisée par les
+  imports, mission 047 : `saveVectorLayerAs`) ; ce qui est exposé à QML et ce qui ne l'est pas ;
+- trafic `http` non chiffré depuis QField Android (`usesCleartextTraffic` / configuration réseau du paquet) ;
+- emprise de la carte lisible depuis le plugin, en Lambert 93 ;
+- comment le cache s'inscrit au registre (`vision_id`, marques `vision/*`) pour revenir à la réouverture
+  et être remplacé au cache suivant de la même couche.
 
-- `outils/projet-modele.mjs` : groupe « ONF » entre « Saisie terrain » et « Fonds de carte » ; pour
-  chaque couche, la copie locale (cochée selon l'arbitrage n° 2) et la couche WFS (`provider="WFS"`,
-  `version='1.0.0'`, `typename=…`, `srsname='EPSG:2154'`, `restrictToRequestBBOX='1'`,
-  lecture seule), rangée dans un sous-groupe « ONF en ligne (à jour) » **décoché** : les deux ne
-  s'affichent pas l'une sur l'autre par défaut (proposition à confirmer à l'arbitrage).
-- Styles : les trois `.qml` de Pascal (`docs/referentiels/brut/onf/`, intacts) recopiés dans `vision.qgz` par l'outil ; seuils d'échelle de l'arbitrage n° 2.
-- Copie locale fabriquée par l'outil de l'étape 1 et jointe aux zips par
-  `outils/zips-projet-modele.mjs` (ou à part, selon l'arbitrage) ; `projet-vision-mise-a-jour.zip`
-  ne doit jamais contenir `saisie.gpkg` (garde existante).
-- Tests (`tests/projet-modele.test.mjs`, `tests/outil-projet-modele.test.mjs`,
-  `tests/zips-projet-modele.test.mjs`) : groupe et ordre, sources WFS exactes, lecture seule,
-  seuils, styles identiques aux `.qml` fournis, copie locale présente et en Lambert 93 ; aucun
-  affaiblissement.
-- Spec § 3.4 (ou nouveau § 3.6) et README à jour ; ADR **0010** « Couches ONF : copie locale et
-  WFS » proposée par l'orchestrateur, **tranchée par Pascal**.
-- **Ne doit pas :** toucher au plugin ni à la bibliothèque de styles (`plugin/styles/`) ; mettre une
-  clé ; ajouter `DT_FR`, `ATE_FR` ou `RB_FR` (hors demande).
+Puis, si une voie est prouvée : un **prototype minimal** (plugin d'essai séparé ou branche du plugin,
+version d'essai), un bouton qui met en cache les trois couches sur l'emprise visible, avec un plafond
+d'emprise ou de nombre d'objets proposé (à trancher par Pascal), et un **protocole d'essai sur le
+Samsung** (une forêt, avec réseau puis en mode avion, réouverture). Si aucune voie n'est prouvée :
+s'arrêter et décrire les options à Pascal.
+
+**Ne doit pas :** publier en stable ; toucher à `vision.qgz` ; trancher le plafond, les textes affichés
+ou le sort des étiquettes ; écrire un texte affiché sans le soumettre à Pascal.
+
+### Étape 2 — `dev` : projet modèle et plugin (après l'essai du prototype sur le Samsung)
+
+- `outils/projet-modele.mjs` : groupe « ONF » entre « Saisie terrain » et « Fonds de carte », avec les
+  trois couches WFS (`provider="WFS"`, version et paramètres selon la mesure de l'étape 1,
+  `restrictToRequestBBOX='1'`, lecture seule), aux styles de Pascal (`docs/referentiels/brut/onf/`,
+  intacts), seuils de l'arbitrage n° 2.
+- Plugin : bouton de cache de zone selon le prototype validé ; cache affiché au-dessus ou à la place des
+  couches WFS (à trancher après le prototype) ; textes validés par Pascal.
+- Tests (projet modèle, plugin, logique du cache hors réseau) ; aucun affaiblissement.
+- Spec (§ 3.3 et nouveau § 3.6) et README à jour ; ADR **0010** « Couches ONF : WFS et cache de zone sur
+  le mobile » proposée par l'orchestrateur, **tranchée par Pascal**.
+- **Ne doit pas :** toucher à la bibliothèque de styles (`plugin/styles/`) ; mettre une clé ; ajouter
+  `DT_FR`, `ATE_FR` ou `RB_FR` (hors demande).
 
 ## Terrain
 
