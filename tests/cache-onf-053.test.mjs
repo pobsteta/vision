@@ -84,7 +84,7 @@ test('textes ajoutés (aller-retour 1/3) : validés par Pascal, mot pour mot, ra
     assert.ok(cites.includes(L.TEXTES_CACHE_ONF[k]), `${k} : « ${L.TEXTES_CACHE_ONF[k]} » absent des arbitrages`);
   }
   assert.ok(cites.includes(L.messageZipReserve('_cache-onf.zip')));
-  assert.deepEqual(noms, ['Forêts publiques (© ONF)', 'Parcelles forestières (© ONF)', 'Points de rencontre des secours (© ONF)']);
+  assert.deepEqual(noms, ['Forêts publiques (© ONF)', 'Parcelles forestières (© ONF)', 'Points de secours (© ONF)']);
   assert.equal(L.TEXTES_CACHE_ONF_PROPOSES, undefined, 'plus de textes proposés en attente');
   assert.ok(!/NON VALIDÉS/.test(lire('plugin/vision-logique.mjs')));
 });
@@ -896,4 +896,28 @@ test('emprise de la carte : une emprise plate reste refusée (« Position de la 
   const plate = { xmin: 922355.8894, ymin: 6685293.045, xmax: 922355.8894, ymax: 6685293.045 };
   assert.equal(L.cacheJugerEmprise(plate, EMPRISE_VRAISEMBLANCE).message, L.TEXTES_CACHE_ONF.positionIllisible);
   assert.equal(L.cacheJugerEmprise({ ...plate, xmax: plate.xmax + 1000 }, EMPRISE_VRAISEMBLANCE).refus, 'illisible');
+});
+
+// ------------------------------------------------------------------------------------------- « Points de secours (© ONF) »
+// Pascal, 25 novembre 2026 (après l'essai réussi du prototype) : nom raccourci. Les textes de réussite et du panneau restent
+// « … point(s) de rencontre ». Le registre ne stocke pas le nom affiché : un cache enregistré avant revient sous le nouveau nom.
+test('nom raccourci : « Points de secours (© ONF) », lu aussi dans le tableau des textes de la fiche ; réussite et panneau inchangés', () => {
+  assert.equal(L.coucheOnf('PRS_FR').nom, 'Points de secours (© ONF)');
+  assert.deepEqual(textesDeLaFiche()['Noms des couches'].slice(0, 3), L.CACHE_ONF.couches.map((c) => c.nom));
+  assert.match(L.messageCacheReussi({ FOR_PUBL_FR: 1, PARC_PUBL_FR: 1, PRS_FR: 2 }, DATE), /2 points de rencontre/);
+  assert.match(L.messageTropDObjets('PRS_FR'), /5 000 points de rencontre/);
+});
+
+test('cache enregistré avant le changement de nom : rechargé sous « Points de secours (© ONF) » (le registre ne garde pas le nom)', () => {
+  const anciennes = entreesCache().map((e) => ({ ...e, nom: e.couche === 'PRS_FR' ? 'Points de rencontre des secours (© ONF)' : undefined }));
+  for (const e of entreesCache()) assert.ok(!('nom' in e), 'entrée du registre sans nom affiché');
+  const reglages = new Map([[L.cleRegistre(ID), JSON.stringify(anciennes)]]);
+  const noms = [];
+  const r = L.demarrerProjet({
+    variables: { vision_id: ID }, dossierProjet: PROJET, existe: () => true, chargerCouche: () => null,
+    reglages: { value: (k, d) => (reglages.has(k) ? reglages.get(k) : d), setValue: (k, v) => reglages.set(k, v) },
+    chargerCache: (source, nom, couche) => { noms.push([couche, nom]); return { isValid: true, readOnly: false }; },
+  });
+  assert.equal(r.douteuses, 0);
+  assert.deepEqual(noms.find((x) => x[0] === 'PRS_FR'), ['PRS_FR', 'Points de secours (© ONF)']);
 });

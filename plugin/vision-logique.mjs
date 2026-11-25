@@ -1520,7 +1520,7 @@ export const CACHE_ONF = {
       champs: ['iidtn_frt', 'llib_frt', 'cdom_frt', 'cinse_dep'] },
     { couche: 'PARC_PUBL_FR', nom: 'Parcelles forestières (© ONF)', wkb: 6, un: 'parcelle', plusieurs: 'parcelles',
       champs: ['iidtn_frt', 'llib_frt', 'ccod_prf'] },
-    { couche: 'PRS_FR', nom: 'Points de rencontre des secours (© ONF)', wkb: 1, un: 'point de rencontre', plusieurs: 'points de rencontre',
+    { couche: 'PRS_FR', nom: 'Points de secours (© ONF)', wkb: 1, un: 'point de rencontre', plusieurs: 'points de rencontre',
       champs: ['iidtn_prs', 'cinse_dep', 'loff_prs', 'cdfci_prs', 'ccod_cmat', 'ccod_ctps', 'llib_prs', 'lobs_prs', 'qlat_prs',
         'qlon_prs', 'qdis_prs', 'llib_com', 'cinse_com'] },
   ],
