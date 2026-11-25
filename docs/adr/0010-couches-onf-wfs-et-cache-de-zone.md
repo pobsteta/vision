@@ -1,7 +1,7 @@
 # ADR 0010 — Couches ONF : WFS en ligne et cache de zone sur le mobile
 
 - **Date :** 2026-11-25
-- **Statut :** **proposée**, à trancher par Pascal
+- **Statut :** **acceptée par Pascal le 25 novembre 2026** (« je valide le reste »)
 - **Proposée par :** Claude (orchestrateur)
 - **Tranchée par :** Pascal
 - **Mission :** 053 (`pilotage/missions/053-couches-onf-wfs.md`)
@@ -33,7 +33,8 @@ style à côté), et qui revient à chaque réouverture.
 ## Ce qui est décidé
 
 1. **En ligne** : groupe « ONF » dans `vision.qgz`, entre « Saisie terrain » et les fonds, trois couches WFS en
-   lecture seule, requêtes limitées à l'emprise visible ; forêts toujours visibles, parcelles et points en deçà du
+   lecture seule, nommées comme celles du cache (« Forêts publiques (© ONF) », « Parcelles forestières (© ONF) »,
+   « Points de secours (© ONF) » : « en ligne » écarté par Pascal, trop long), requêtes limitées à l'emprise visible ; forêts toujours visibles, parcelles et points en deçà du
    1:50 000 ; hors du thème « Fond embarqué ».
 2. **Sans réseau** : bouton « Mettre en cache les couches ONF de cette zone » ; emprise visible (quatre coins si la
    carte est tournée) de 20 km de côté au plus, 5 000 objets par couche au plus ; requêtes `GetFeature` WFS 1.0.0 +
@@ -62,8 +63,8 @@ style à côté), et qui revient à chaque réouverture.
 | Lettre | Question | Réponse | Ce que ça coûte | Prêts à payer ? |
 |---|---|---|---|---|
 | **F**rugale | Plus simple ? | Mécanismes de QGIS et GDAL (`.gfs`, `.qml` voisin, `saveVectorLayerAs`) ; pas de copie nationale. | Code du cache dans le plugin (requêtes, contrôles, registre). | oui (Pascal, 25 novembre 2026) |
-| **R**esponsable | Qui fait quoi ? | L'agent met en cache avec réseau, avant de partir ; l'ONF tient le service. | Un geste de plus pour l'agent. | à trancher |
-| **A**nticiper | Imprévu ? | Service indisponible ou modifié (champs, http) ; zone plus grande que 20 km ; cache oublié avant le départ ; mémoire non libérée (Qt). | Message clair, ancien cache gardé ; zone limitée. | à trancher |
+| **R**esponsable | Qui fait quoi ? | L'agent met en cache avec réseau, avant de partir ; l'ONF tient le service. | Un geste de plus pour l'agent. | oui (Pascal, 25 novembre 2026) |
+| **A**nticiper | Imprévu ? | Service indisponible ou modifié (champs, http) ; zone plus grande que 20 km ; cache oublié avant le départ ; mémoire non libérée (Qt). | Message clair, ancien cache gardé ; zone limitée. | oui (Pascal, 25 novembre 2026) |
 | **N**ovateur | Idées écoutées ? | Copie nationale, WFS seul, voie A, voie C4 examinées ; sonde avant le prototype. | — | — |
 | **C**oût | Dépense inutile ? | Pas de fabrication nationale ni de stockage lourd. | — | — |
 | **É**cologique | Réutilisation ? | Données publiques de l'ONF, service existant ; formats ouverts (GML, GeoPackage). | — | — |
