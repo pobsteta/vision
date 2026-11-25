@@ -101,6 +101,45 @@ s'arrêter et décrire les options à Pascal.
 **Ne doit pas :** publier en stable ; toucher à `vision.qgz` ; trancher le plafond, les textes affichés
 ou le sort des étiquettes ; écrire un texte affiché sans le soumettre à Pascal.
 
+### Étape 1 ter — `dev` : prototype du cache de zone (ouverte le 25 novembre 2026)
+
+La sonde a prouvé la voie B sur le Samsung (QField 4.3.8, essais n° 1 à 4 au journal, captures dans
+`docs/referentiels/brut/onf/`) : `GetFeature` + `BBOX` en http, GML lu avec les accents, réécrit en GeoPackage,
+relu sans réseau. Le prototype est le **cache de zone dans le plugin**, publié en préversion `plugin-essai`,
+**sonde retirée** :
+
+- bouton dans le panneau ; emprise visible (carte tournée : les quatre coins) ; plafonds n° 5 ; les trois couches ;
+  contrôle de complétude obligatoire (fin de collection, aucune exception, nombre d'objets ≤ 5 000) ;
+- **système imposé EPSG:2154** aux couches reçues (« système inconnu » à chaque réponse) et **type de géométrie
+  fixé** (MultiPolygon pour forêts et parcelles, Point pour les points : la réponse donne tantôt Polygon, tantôt
+  MultiPolygon) ; champ parasite `gml_id` (et `coordinates` s'il apparaît) écarté ;
+- enregistrement en GeoPackage selon la forme R2 corrigée de `docs/referentiels/cache-zone-qfield.md` (une
+  génération par dossier, remplacement tout ou rien, ancien cache gardé en cas d'échec), rechargement à la
+  réouverture du projet, cache en tête de liste, lecture seule ;
+- **styles adaptés** (arbitrages n° 3 et 4) générés depuis les `.qml` de Pascal, qui restent intacts : forêts
+  étiquetées par `iidtn_frt`, parcelles par `ccod_prf`, formulaire des points sur les vrais champs ;
+- libération des couches de travail impossible en QML (Qt 6.10.3) : ne pas l'appeler, le dire en commentaire ;
+- textes validés par Pascal (ci-dessous), mot pour mot ; version du plugin montée (préversion seulement) ;
+- tests hors réseau de toute la logique ; protocole d'essai Samsung court (forêt de JFC, avec réseau, mode avion,
+  réouverture, zone trop grande, coupure).
+
+**Textes validés par Pascal (25 novembre 2026, « Je valide »)** — les nombres et la date sont remplis par le plugin :
+
+| Moment | Texte |
+|---|---|
+| Bouton | « Mettre en cache les couches ONF de cette zone » |
+| Pendant | « Téléchargement des couches ONF… » |
+| Réussite | « Couches ONF en cache : 4 forêts, 53 parcelles, 1 point de rencontre (zone du 25/11/2026). » |
+| Zone trop grande | « Zone trop grande (plus de 20 km de côté) : zoomez, puis recommencez. » |
+| Trop d'objets | « Trop d'objets dans cette zone (plus de 5 000 parcelles) : zoomez, puis recommencez. » |
+| Pas de réseau | « Pas de réseau : le cache ONF n'est pas mis à jour, l'ancien est gardé. » |
+| Réponse incomplète | « Réponse incomplète du service ONF : le cache n'est pas mis à jour, l'ancien est gardé. » |
+| Dans le panneau | « Cache ONF du 25/11/2026 : 4 forêts, 53 parcelles, 1 point de rencontre. » |
+| Noms des couches | « Forêts publiques (ONF) », « Parcelles forestières (ONF) », « Points de rencontre des secours (ONF) » |
+
+« Trop d'objets » nomme la couche en cause (parcelles, forêts ou points de rencontre). Tout autre texte est soumis à
+Pascal avant d'être écrit.
+
 ### Étape 2 — `dev` : projet modèle et plugin (après l'essai du prototype sur le Samsung)
 
 - `outils/projet-modele.mjs` : groupe « ONF » entre « Saisie terrain » et « Fonds de carte », avec les
