@@ -22,6 +22,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { deflateRawSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { STYLES_ONF } from '../plugin/vision-styles-onf.mjs'; // mission 053 : mêmes styles adaptés que le cache du plugin (générés depuis les .qml de Pascal)
+import { CACHE_ONF, CACHE_FIXE, NOM_DOSSIER_COPIES } from '../plugin/vision-logique.mjs'; // mission 053, étape 3 : chemins et marques du groupe « ONF Cache »
 
 export const VISION_ID_PAR_DEFAUT = 'd98bf4b8-0fac-4dac-85cf-58e6701aceeb';
 export const VERSION_QGIS = '3.34.0-Prizren'; // version d'écriture déclarée (LTR) ; QGIS la met à jour à l'enregistrement
@@ -127,7 +128,8 @@ function maplayer(f) {
 // Clés de l'URI : url, typename, version, srsname, restrictToRequestBBOX (qgswfsconstants.cpp l. 28-53 ; liste des clés connues
 // qgswfsdatasourceuri.cpp l. 175-200). Écrites par ordre alphabétique de clé, comme QgsDataSourceUri::uri().
 // Non prouvé : l'affichage de ces couches dans QField 4.3.8 (fournisseur WFS de QGIS sur Android) : essai de Pascal (cache-zone-qfield.md § 13).
-export const GROUPE_ONF = 'ONF';
+// Étape 3 (Pascal, 25 novembre 2026) : le groupe « ONF » devient « ONF WFS » ; un groupe « ONF Cache », au-dessus, porte les couches du cache.
+export const GROUPE_ONF = 'ONF WFS';
 export const SERVICE_ONF = 'http://ws.carmencarto.fr/WFS/105/ONF_Forets';
 export const VERSION_WFS_ONF = '1.0.0';
 export const ATTRIBUTION_ONF = '© ONF';
@@ -178,6 +180,85 @@ function maplayerOnf(c) {
       <attributionUrl></attributionUrl>
 ${m[2].replace(/^\n+/, '').replace(/\n+$/, '')}
     </maplayer>`;
+}
+
+// ---------- Mission 053, étape 3, temps 3 : groupe « ONF Cache » (voie 1 du § 14 de docs/referentiels/cache-zone-qfield.md) ----------
+// Arbitrages de Pascal (25 novembre 2026) : groupe « ONF Cache » au-dessus de « ONF WFS », les deux cochés ; trois couches GeoPackage à chemin
+// fixe ./vision-imports/_cache-onf/actuel/<couche>.gpkg que le plugin remplit (bascule par renommage puis reload()) ; mêmes noms validés, styles
+// adaptés et seuils du cache (style seul : forêts toujours visibles, parcelles et points en deçà du 1:50 000) ; lecture seule ; « © ONF ».
+// Marques lues par le plugin (jamais le nom) : vision/cache=onf, vision/couche=<couche>, vision/emplacement=actuel, dans les
+// <customproperties> de la couche (QGIS 3a92eb3 qgsmaplayer.cpp, lecture des propriétés personnalisées de la couche).
+// Les GeoPackage vides vont dans projet-vision.zip seulement (outils/zips-projet-modele.mjs), jamais dans la mise à jour.
+export const GROUPE_CACHE_ONF = 'ONF Cache';
+export const DOSSIER_CACHE_FIXE = `${NOM_DOSSIER_COPIES}/${CACHE_ONF.dossier}/${CACHE_FIXE.dossier}`; // relatif au dossier du projet
+export const COUCHES_CACHE_ONF = ['PRS_FR', 'PARC_PUBL_FR', 'FOR_PUBL_FR'].map((code) => {
+  const c = CACHE_ONF.couches.find((x) => x.couche === code);
+  return { couche: code, nom: c.nom, geometrie: c.wkb === 1 ? 'Point' : 'Polygon', wkb: c.wkb, champs: c.champs };
+});
+export const sourceCacheOnf = (c) => `./${DOSSIER_CACHE_FIXE}/${c.couche}.gpkg|layername=${c.couche}`;
+const idCacheOnf = (c) => idCouche({ nom: 'cache_' + c.couche });
+const MARQUES_CACHE = (c) => [['vision/cache', CACHE_ONF.sorte], ['vision/couche', c.couche], [CACHE_FIXE.marque, CACHE_FIXE.valeur]];
+
+function maplayerCacheOnf(c) {
+  const style = STYLES_ONF[c.couche];
+  const m = /<qgis ([^>]*)>([\s\S]*)<\/qgis>\s*$/.exec(style);
+  if (!m) throw new Error(`style ONF ${c.couche} : élément <qgis> introuvable`);
+  // Attributs du style repris tels quels (seuils du cache compris), sauf version (de QGIS) et readOnly (lecture seule imposée).
+  const attrs = [...m[1].matchAll(/(\w+)="([^"]*)"/g)].filter((a) => a[1] !== 'version' && a[1] !== 'readOnly').map((a) => `${a[1]}="${a[2]}"`);
+  // Marques ajoutées à la carte de propriétés du style (une seule <customproperties> par style : contrôlé).
+  const corps = m[2].replace(/^\n+/, '').replace(/\n+$/, '');
+  const ouverture = /<customproperties>\s*<Option type="Map">\n/;
+  if ((corps.match(/<customproperties>/g) || []).length !== 1 || !ouverture.test(corps)) throw new Error(`style ONF ${c.couche} : <customproperties> attendu une fois`);
+  const marques = MARQUES_CACHE(c).map(([k, v]) => `      <Option name="${xml(k)}" type="QString" value="${xml(v)}"/>\n`).join('');
+  const e = EXTENT;
+  return `    <maplayer ${attrs.join(' ')} geometry="${c.geometrie}" readOnly="1" type="vector">
+      <extent><xmin>${e.xmin}</xmin><ymin>${e.ymin}</ymin><xmax>${e.xmax}</xmax><ymax>${e.ymax}</ymax></extent>
+      <id>${idCacheOnf(c)}</id>
+      <datasource>${xml(sourceCacheOnf(c))}</datasource>
+      <keywordList><value></value></keywordList>
+      <layername>${xml(c.nom)}</layername>
+      <srs>${SRS_2154}</srs>
+      <resourceMetadata>
+        <identifier></identifier>
+        <parentidentifier></parentidentifier>
+        <language></language>
+        <type></type>
+        <title>${xml(c.nom)}</title>
+        <abstract></abstract>
+        <links/>
+        <fees></fees>
+        <encoding></encoding>
+        <crs>${SRS_2154}</crs>
+        <extent/>
+        <rights>${xml(ATTRIBUTION_ONF)}</rights>
+      </resourceMetadata>
+      <provider encoding="UTF-8">ogr</provider>
+      <map-layer-style-manager current="default"><map-layer-style name="default"/></map-layer-style-manager>
+      <attribution>${xml(ATTRIBUTION_ONF)}</attribution>
+      <attributionUrl></attributionUrl>
+${corps.replace(ouverture, (x) => x + marques)}
+    </maplayer>`;
+}
+
+// GeoPackage vide d'une couche du cache (première installation) : même forme que saisie.gpkg (OGC 12-128, 1.3, node:sqlite, sans R-tree),
+// table = nom du fichier = nom de la couche du service (comme saveVectorLayerAs, QField qflayerutils.cpp l. 705), colonnes fid et geom
+// (noms par défaut du pilote GPKG de GDAL), champs du service en TEXT (DescribeFeatureType de la mesure n° 1), MULTIPOLYGON ou POINT,
+// EPSG:2154. Contenu identique à chaque exécution (aucune date du jour).
+export function ecrireGpkgCacheVide(chemin, code) {
+  const c = COUCHES_CACHE_ONF.find((x) => x.couche === code);
+  if (!c) throw new Error(`couche du cache inconnue : ${code}`);
+  rmSync(chemin, { force: true });
+  const db = new DatabaseSync(chemin);
+  try {
+    // synchronous = OFF : fichier de construction, jamais ouvert pendant l'écriture ; sans effet sur les octets.
+    db.exec(`PRAGMA page_size = 4096; PRAGMA journal_mode = DELETE; PRAGMA synchronous = OFF; PRAGMA application_id = 1196444487; PRAGMA user_version = 10300;
+${SCHEMA_GPKG}
+CREATE TABLE "${c.couche}" (fid INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, geom ${c.wkb === 1 ? 'POINT' : 'MULTIPOLYGON'}${c.champs.map((f) => `, "${f}" TEXT`).join('')});`);
+    systemesGpkg(db);
+    db.prepare('INSERT INTO gpkg_contents (table_name, data_type, identifier, description, last_change, min_x, min_y, max_x, max_y, srs_id) VALUES (?,?,?,?,?,NULL,NULL,NULL,NULL,?)')
+      .run(c.couche, 'features', c.couche, '', DATE_GPKG, 2154);
+    db.prepare('INSERT INTO gpkg_geometry_columns VALUES (?,?,?,?,0,0)').run(c.couche, 'geom', c.wkb === 1 ? 'POINT' : 'MULTIPOLYGON', 2154);
+  } finally { db.close(); }
 }
 
 // ---------- Mission 021 : la couche « Saisie terrain » (spec § 3.5 et § 5) ----------
@@ -305,20 +386,24 @@ ${champs.map((c) => `        <field name="${c.nom}" editable="${c.editable}"/>`)
 const WKT_4326 = 'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AXIS["Latitude",NORTH],AXIS["Longitude",EAST],AUTHORITY["EPSG","4326"]]';
 const WKT_2154 = 'PROJCS["RGF93 v1 / Lambert-93",GEOGCS["RGF93 v1",DATUM["RGF93_v1",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],TOWGS84[0,0,0,0,0,0,0],AUTHORITY["EPSG","6171"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4171"]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["latitude_of_origin",46.5],PARAMETER["central_meridian",3],PARAMETER["standard_parallel_1",49],PARAMETER["standard_parallel_2",44],PARAMETER["false_easting",700000],PARAMETER["false_northing",6600000],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","2154"]]';
 export const DATE_GPKG = '2026-11-03T00:00:00.000Z';
+const SCHEMA_GPKG = `CREATE TABLE gpkg_spatial_ref_sys (srs_name TEXT NOT NULL, srs_id INTEGER PRIMARY KEY, organization TEXT NOT NULL, organization_coordsys_id INTEGER NOT NULL, definition TEXT NOT NULL, description TEXT);
+CREATE TABLE gpkg_contents (table_name TEXT NOT NULL PRIMARY KEY, data_type TEXT NOT NULL, identifier TEXT UNIQUE, description TEXT DEFAULT '', last_change DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), min_x DOUBLE, min_y DOUBLE, max_x DOUBLE, max_y DOUBLE, srs_id INTEGER, CONSTRAINT fk_gc_r_srs_id FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys(srs_id));
+CREATE TABLE gpkg_geometry_columns (table_name TEXT NOT NULL, column_name TEXT NOT NULL, geometry_type_name TEXT NOT NULL, srs_id INTEGER NOT NULL, z TINYINT NOT NULL, m TINYINT NOT NULL, CONSTRAINT pk_geom_cols PRIMARY KEY (table_name, column_name), CONSTRAINT uk_gc_table_name UNIQUE (table_name), CONSTRAINT fk_gc_tn FOREIGN KEY (table_name) REFERENCES gpkg_contents(table_name), CONSTRAINT fk_gc_srs FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys (srs_id));`;
+function systemesGpkg(db) {
+  const srs = db.prepare('INSERT INTO gpkg_spatial_ref_sys VALUES (?,?,?,?,?,?)');
+  srs.run('Undefined Cartesian SRS', -1, 'NONE', -1, 'undefined', 'undefined Cartesian coordinate reference system');
+  srs.run('Undefined geographic SRS', 0, 'NONE', 0, 'undefined', 'undefined geographic coordinate reference system');
+  srs.run('WGS 84 geodetic', 4326, 'EPSG', 4326, WKT_4326, 'longitude/latitude coordinates in decimal degrees on the WGS 84 spheroid');
+  srs.run('RGF93 v1 / Lambert-93', 2154, 'EPSG', 2154, WKT_2154, 'Lambert-93, France métropolitaine (Corse comprise)');
+}
 export function ecrireGpkg(chemin) {
   rmSync(chemin, { force: true });
   const db = new DatabaseSync(chemin);
   try {
     db.exec(`PRAGMA page_size = 4096; PRAGMA journal_mode = DELETE; PRAGMA application_id = 1196444487; PRAGMA user_version = 10300;
-CREATE TABLE gpkg_spatial_ref_sys (srs_name TEXT NOT NULL, srs_id INTEGER PRIMARY KEY, organization TEXT NOT NULL, organization_coordsys_id INTEGER NOT NULL, definition TEXT NOT NULL, description TEXT);
-CREATE TABLE gpkg_contents (table_name TEXT NOT NULL PRIMARY KEY, data_type TEXT NOT NULL, identifier TEXT UNIQUE, description TEXT DEFAULT '', last_change DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), min_x DOUBLE, min_y DOUBLE, max_x DOUBLE, max_y DOUBLE, srs_id INTEGER, CONSTRAINT fk_gc_r_srs_id FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys(srs_id));
-CREATE TABLE gpkg_geometry_columns (table_name TEXT NOT NULL, column_name TEXT NOT NULL, geometry_type_name TEXT NOT NULL, srs_id INTEGER NOT NULL, z TINYINT NOT NULL, m TINYINT NOT NULL, CONSTRAINT pk_geom_cols PRIMARY KEY (table_name, column_name), CONSTRAINT uk_gc_table_name UNIQUE (table_name), CONSTRAINT fk_gc_tn FOREIGN KEY (table_name) REFERENCES gpkg_contents(table_name), CONSTRAINT fk_gc_srs FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys (srs_id));
+${SCHEMA_GPKG}
 CREATE TABLE ${TABLE_SAISIE} (fid INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, geom POINT, essence TEXT, diametre INTEGER, remarque TEXT, date DATETIME);`);
-    const srs = db.prepare('INSERT INTO gpkg_spatial_ref_sys VALUES (?,?,?,?,?,?)');
-    srs.run('Undefined Cartesian SRS', -1, 'NONE', -1, 'undefined', 'undefined Cartesian coordinate reference system');
-    srs.run('Undefined geographic SRS', 0, 'NONE', 0, 'undefined', 'undefined geographic coordinate reference system');
-    srs.run('WGS 84 geodetic', 4326, 'EPSG', 4326, WKT_4326, 'longitude/latitude coordinates in decimal degrees on the WGS 84 spheroid');
-    srs.run('RGF93 v1 / Lambert-93', 2154, 'EPSG', 2154, WKT_2154, 'Lambert-93, France métropolitaine (Corse comprise)');
+    systemesGpkg(db);
     db.prepare('INSERT INTO gpkg_contents (table_name, data_type, identifier, description, last_change, min_x, min_y, max_x, max_y, srs_id) VALUES (?,?,?,?,?,NULL,NULL,NULL,NULL,?)')
       .run(TABLE_SAISIE, 'features', TABLE_SAISIE, '', DATE_GPKG, 2154);
     db.prepare('INSERT INTO gpkg_geometry_columns VALUES (?,?,?,?,0,0)').run(TABLE_SAISIE, 'geom', 'POINT', 2154);
@@ -344,12 +429,21 @@ export function ecrireQgs(visionId = VISION_ID_PAR_DEFAUT) {
 ${feuillesOnf}
     </layer-tree-group>
 `;
-  const arbre = feuilleSaisie + groupeOnf + `    <layer-tree-group name="${xml(GROUPE_FONDS)}" checked="Qt::Checked" expanded="1">
+  const feuillesCache = COUCHES_CACHE_ONF.map((c) => `      <layer-tree-layer id="${idCacheOnf(c)}" name="${xml(c.nom)}" source="${xml(sourceCacheOnf(c))}" providerKey="ogr" expanded="1" checked="Qt::Checked" legend_exp="" patch_size="-1,-1" legend_split_behavior="0">
+        <customproperties><Option/></customproperties>
+      </layer-tree-layer>`).join('\n');
+  const groupeCache = `    <layer-tree-group name="${xml(GROUPE_CACHE_ONF)}" checked="Qt::Checked" expanded="1">
+      <customproperties><Option/></customproperties>
+${feuillesCache}
+    </layer-tree-group>
+`;
+  const arbre = feuilleSaisie + groupeCache + groupeOnf + `    <layer-tree-group name="${xml(GROUPE_FONDS)}" checked="Qt::Checked" expanded="1">
       <customproperties><Option/></customproperties>
 ${feuilles}
     </layer-tree-group>
     <custom-order enabled="0">
       <item>${idSaisie()}</item>
+${COUCHES_CACHE_ONF.map((c) => `      <item>${idCacheOnf(c)}</item>`).join('\n')}
 ${COUCHES_ONF.map((c) => `      <item>${idOnf(c)}</item>`).join('\n')}
 ${FONDS.map((f) => `      <item>${idCouche(f)}</item>`).join('\n')}
     </custom-order>`;
@@ -389,11 +483,13 @@ ${arbre}
   <legend updateDrawingOrder="true"/>
   <projectlayers>
 ${maplayerSaisie()}
+${COUCHES_CACHE_ONF.map(maplayerCacheOnf).join('\n')}
 ${COUCHES_ONF.map(maplayerOnf).join('\n')}
 ${FONDS.map(maplayer).join('\n')}
   </projectlayers>
   <layerorder>
     <layer id="${idSaisie()}"/>
+${COUCHES_CACHE_ONF.map((c) => `    <layer id="${idCacheOnf(c)}"/>`).join('\n')}
 ${COUCHES_ONF.map((c) => `    <layer id="${idOnf(c)}"/>`).join('\n')}
 ${FONDS.map((f) => `    <layer id="${idCouche(f)}"/>`).join('\n')}
   </layerorder>

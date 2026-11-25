@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
 import { ecrireZip } from './recette/essai/zip-ecrire.mjs';
-import { fabriquerZips, nomsDuZip, verifierMiseAJour, verifierPremiereInstallation, ZIP_MISE_A_JOUR, ZIP_PREMIERE_INSTALLATION } from '../outils/zips-projet-modele.mjs';
+import { fabriquerZips, nomsDuZip, verifierMiseAJour, verifierPremiereInstallation, ZIP_MISE_A_JOUR, ZIP_PREMIERE_INSTALLATION, MEMBRES_CACHE } from '../outils/zips-projet-modele.mjs';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
 const tmp = mkdtempSync(join(tmpdir(), 'vision-zips-021-'));
@@ -32,9 +32,9 @@ test('le zip de mise à jour contient vision.qgz seul, sans saisie.gpkg', () => 
   assert.deepEqual(nomsDuZip(buf), ['vision.qgz']);
   assert.ok(contenu(buf, 'vision.qgz').equals(contenu(readFileSync(r.premiereInstallation), 'vision.qgz')));
 });
-test('le zip de première installation contient vision.qgz et saisie.gpkg (vide, identique à celui du dépôt)', () => {
+test('le zip de première installation contient vision.qgz et saisie.gpkg (vide, identique à celui du dépôt), et le cache ONF vide (mission 053, étape 3)', () => {
   const r = fabriquerZips(join(tmp, 'b'), RACINE), buf = readFileSync(r.premiereInstallation);
-  assert.deepEqual(nomsDuZip(buf).sort(), ['saisie.gpkg', 'vision.qgz']);
+  assert.deepEqual(nomsDuZip(buf).sort(), ['saisie.gpkg', 'vision.qgz', ...MEMBRES_CACHE].sort());
   assert.ok(contenu(buf, 'saisie.gpkg').equals(readFileSync(join(RACINE, 'saisie.gpkg'))));
   assert.ok(contenu(buf, 'vision.qgz').equals(readFileSync(join(RACINE, 'vision.qgz'))));
 });
@@ -60,9 +60,10 @@ test('garde-fou : un zip de mise à jour avec autre chose que vision.qgz seul es
   assert.doesNotThrow(() => verifierMiseAJour(ecrireZip([e('vision.qgz')])));
 });
 test('garde-fou : la première installation sans saisie.gpkg ou avec un intrus est refusée', () => {
-  assert.throws(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz')])), /vision\.qgz et saisie\.gpkg/);
-  assert.throws(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz'), e('saisie.gpkg'), e('x')])), /vision\.qgz et saisie\.gpkg/);
-  assert.doesNotThrow(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz'), e('saisie.gpkg')])));
+  const cache = MEMBRES_CACHE.map((n) => e(n));
+  assert.throws(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz'), ...cache])), /vision\.qgz, saisie\.gpkg/);
+  assert.throws(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz'), e('saisie.gpkg'), ...cache, e('x')])), /vision\.qgz, saisie\.gpkg/);
+  assert.doesNotThrow(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz'), e('saisie.gpkg'), ...cache])));
 });
 test('fabriquerZips échoue si une source manque', () => {
   const vide = join(tmp, 'vide'); writeFileSync(join(tmp, 'seul.qgz'), 'x');

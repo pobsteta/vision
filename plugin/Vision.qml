@@ -343,7 +343,17 @@ Item {
       libererCouche: libererCouche,
       coucheDuProjet: coucheDuProjet,
       chargerCouche: id ? chargeur() : function () { return null; },
-      chargerCache: id ? chargerCache : function () { return null; }
+      chargerCache: id ? chargerCache : function () { return null; },
+      // Mission 053, étape 3 : groupe « ONF Cache » (couches fixes : migration du cache 0.7.0, fichiers manquants créés).
+      couchesFixes: couchesFixesDuCache(),
+      renommer: renommerFichier,
+      recharger: rechargerCouche,
+      creerIterateur: function (l) { return LayerUtils.createFeatureIterator(l); },
+      ecrireFichier: ecrireFichier,
+      effacerFichier: effacerFichier,
+      ouvrirCouche: function (uri, nom) { return LayerUtils.loadVectorLayer(uri, nom); },
+      reecrireCouche: reecrireCouche,
+      styles: StylesOnf.STYLES_ONF
     });
     registreChange();
     return r;
@@ -487,13 +497,47 @@ Item {
   readonly property string texteBoutonCache: Logique.TEXTES_CACHE_ONF.bouton
   readonly property string textePendantCache: Logique.TEXTES_CACHE_ONF.pendant
 
-  // Couche du cache ONF déjà sur la carte (marques vision/cache=onf et vision/couche), ou null.
+  // Mission 053, étape 3 : couches fixes du groupe « ONF Cache » de vision.qgz (marque vision/emplacement=actuel en plus de
+  // vision/cache et vision/couche). Elles appartiennent au projet : jamais retirées, jamais ajoutées, seulement relues (reload).
+  // Trouvées par leurs marques (jamais par le nom) : { <couche>: couche } si les trois sont
+  // au projet (mode groupe), sinon null (vision.qgz sans le groupe : mode ancien, cache en tête de liste).
+  function couchesFixesDuCache() {
+    if (!qgisProject) return null;
+    const r = {};
+    const couches = ProjectUtils.mapLayers(qgisProject);
+    for (const id in couches) {
+      const l = couches[id];
+      if (!l || typeof l.customProperty !== "function") continue;
+      if (String(l.customProperty("vision/cache", "")) !== "onf" || String(l.customProperty(Logique.CACHE_FIXE.marque, "")) !== Logique.CACHE_FIXE.valeur) continue;
+      const c = String(l.customProperty("vision/couche", ""));
+      if (c !== "" && !r[c]) r[c] = l;
+    }
+    return Logique.cacheModeGroupe(r) ? r : null;
+  }
+
+  // Bascule (§ 14.2) : platformUtilities.renameFile (QField v4.3.7 qfplatformutilities.h l. 132, Q_INVOKABLE), toujours avec
+  // overwrite = true (sans lui, une cible présente fait échouer le renommage puis la copie, et la source est effacée :
+  // qfplatformutilities.cpp l. 214-250). Garde du dossier : dans la logique (peutToucherCache).
+  function renommerFichier(de, vers) {
+    return !!platformUtilities.renameFile(de, vers, true);
+  }
+
+  // Relecture du fichier au même chemin : reload() (QGIS 3a92eb3 qgsmaplayer.h l. 556, Q_INVOKABLE ; qgsogrprovider.cpp
+  // l. 4686-4696 : ferme puis rouvre), puis triggerRepaint() (l. 1934, slot). Prouvé par la sonde C4 (§ 14 bis).
+  function rechargerCouche(l) {
+    l.reload();
+    l.triggerRepaint();
+  }
+
+  // Couche du cache ONF déjà sur la carte (marques vision/cache=onf et vision/couche), ou null. Mode ancien seulement :
+  // les couches fixes du groupe « ONF Cache » sont écartées.
   function coucheDuCache(nomCouche) {
     if (!qgisProject) return null;
     const couches = ProjectUtils.mapLayers(qgisProject);
     for (const id in couches) {
       const l = couches[id];
       if (!l || typeof l.customProperty !== "function") continue;
+      if (String(l.customProperty(Logique.CACHE_FIXE.marque, "")) === Logique.CACHE_FIXE.valeur) continue;
       if (String(l.customProperty("vision/cache", "")) === "onf" && String(l.customProperty("vision/couche", "")) === nomCouche) return l;
     }
     return null;
@@ -515,14 +559,17 @@ Item {
     return couche;
   }
 
-  // Retire de la carte toutes les couches du cache ONF (ProjectUtils.removeMapLayer : le projet les détruit).
+  // Retire de la carte toutes les couches du cache ONF ajoutées par le plugin (mode ancien ; ProjectUtils.removeMapLayer : le
+  // projet les détruit). Les couches fixes du groupe « ONF Cache » (Logique.CACHE_FIXE.marque) ne sont jamais retirées.
   function retirerCacheDeLaCarte() {
     if (!qgisProject) return;
     const couches = ProjectUtils.mapLayers(qgisProject);
     const ids = [];
     for (const id in couches) {
       const l = couches[id];
-      if (l && typeof l.customProperty === "function" && String(l.customProperty("vision/cache", "")) === "onf") ids.push(String(l.id));
+      if (!l || typeof l.customProperty !== "function") continue;
+      if (String(l.customProperty(Logique.CACHE_FIXE.marque, "")) === Logique.CACHE_FIXE.valeur) continue;
+      if (String(l.customProperty("vision/cache", "")) === "onf") ids.push(String(l.id));
     }
     for (let i = 0; i < ids.length; i++) ProjectUtils.removeMapLayer(qgisProject, ids[i]);
   }
@@ -703,83 +750,12 @@ Item {
       imposerSysteme: function (l) { l.crs = CoordinateReferenceSystemUtils.fromDescription("EPSG:2154"); },
       reecrireCouche: reecrireCouche,
       retirerCacheDeLaCarte: retirerCacheDeLaCarte,
-      ajouterCache: ajouterCache
+      ajouterCache: ajouterCache,
+      // Étape 3 : mode groupe si vision.qgz porte le groupe « ONF Cache » (bascule par renommage puis reload, tout ou rien).
+      couchesFixes: couchesFixesDuCache(),
+      renommer: renommerFichier,
+      recharger: rechargerCouche
     });
   }
   // ==== cache ONF : fin
-
-  // ==== sonde C4 : début (outil d'essai, mission 053, étape 3, temps 2 ; docs/referentiels/cache-zone-qfield.md § 14 bis)
-  // À RETIRER AVANT TOUTE FUSION VERS MAIN (tests/sonde-c4-053.test.mjs, « garde » : la sonde ne vit qu'avec VERSION 0.7.0).
-  // Mesure la bascule d'une couche de la carte par renommage de son GeoPackage, puis reload() (voie C4, § 14). Rien au
-  // registre ni au cache ONF ; fichiers dans vision-imports/_sonde-c4/ ; couche « Sonde C4 (essai) » ajoutée à la carte,
-  // retirée par un bouton. Appels lus : platformUtilities.renameFile (QField qfplatformutilities.h l. 132), reload()
-  // (QGIS qgsmaplayer.h l. 556), triggerRepaint() (l. 1934, slot). Textes provisoires.
-  property string sondeC4Texte: ""
-
-  function sondeC4Services() {
-    return {
-      ecrireFichier: ecrireFichier,
-      existe: function (c) { return FileUtils.fileExists(c); },
-      ouvrir: function (uri, nom) { return LayerUtils.loadVectorLayer(uri, nom); },
-      reecrire: function (l, cible) { return String(LayerUtils.saveVectorLayerAs(l, cible, "GPKG") || ""); },
-      creerIterateur: function (l) { return LayerUtils.createFeatureIterator(l); },
-      ajouter: function (l) { l.setCustomProperty("vision/sonde", "c4"); ProjectUtils.addMapLayer(qgisProject, l); },
-      renommer: function (de, vers) { return !!platformUtilities.renameFile(de, vers, true); },
-      recharger: function (l) { l.reload(); l.triggerRepaint(); },
-      maintenant: function () { return Date.now(); }
-    };
-  }
-
-  function coucheSondeC4() {
-    if (!qgisProject) return null;
-    const couches = ProjectUtils.mapLayers(qgisProject);
-    for (const id in couches) {
-      const l = couches[id];
-      if (l && typeof l.customProperty === "function" && String(l.customProperty("vision/sonde", "")) === "c4") return l;
-    }
-    return null;
-  }
-
-  // Affiche le compte rendu et l'écrit dans vision-imports/_sonde-c4/rapport-<horodatage>.txt.
-  function sondeC4Rapport(lignes) {
-    const entete = "Date : " + new Date().toISOString() + " ; Vision " + versionPlugin + " ; QField " + (versionQField() || "version inconnue");
-    let texte = [entete].concat(lignes).join("\n");
-    const c = Logique.sondeC4Chemins(dossierProjet());
-    if (c) {
-      const chemin = c.dossier + "/" + Logique.sondeC4NomRapport(new Date());
-      let ecrit = false;
-      try { ecrit = ecrireFichier(chemin, texte + "\n"); } catch (e) { ecrit = false; }
-      texte += "\nCompte rendu : " + (ecrit ? chemin : "NON écrit (" + chemin + ")");
-    }
-    sondeC4Texte = texte;
-    console.log(texte);
-    message("Sonde C4 terminée (voir le panneau).");
-  }
-
-  function sondeC4Preparer() {
-    if (coucheSondeC4()) { sondeC4Rapport(["Sonde C4 : couche de sonde déjà sur la carte : la retirer d'abord."]); return; }
-    let r = null;
-    try { r = Logique.sondeC4Preparer(dossierProjet(), sondeC4Services()); } catch (e) { r = { lignes: ["EXCEPTION : " + Logique.texteException(e)] }; }
-    sondeC4Rapport(r.lignes);
-  }
-
-  function sondeC4Bascule() {
-    let r = null;
-    try { r = Logique.sondeC4Bascule(dossierProjet(), sondeC4Services(), coucheSondeC4()); } catch (e) { r = { lignes: ["EXCEPTION : " + Logique.texteException(e)] }; }
-    sondeC4Rapport(r.lignes);
-  }
-
-  function sondeC4Retirer() {
-    const lignes = ["Sonde C4 (outil d'essai, textes provisoires) : retrait"];
-    let n = 0;
-    try {
-      let l = coucheSondeC4();
-      while (l && n < 10) { ProjectUtils.removeMapLayer(qgisProject, String(l.id)); n++; l = coucheSondeC4(); }
-      lignes.push(n + " couche(s) de sonde retirée(s) de la carte ; fichiers gardés dans vision-imports/_sonde-c4/");
-    } catch (e) {
-      lignes.push("EXCEPTION : " + Logique.texteException(e));
-    }
-    sondeC4Rapport(lignes);
-  }
-  // ==== sonde C4 : fin
 }
