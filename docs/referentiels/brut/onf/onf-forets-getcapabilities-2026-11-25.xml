@@ -1,0 +1,153 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<WFS_Capabilities 
+   version="1.0.0" 
+   updateSequence="0" 
+   xmlns="http://www.opengis.net/wfs" 
+   xmlns:ogc="http://www.opengis.net/ogc" 
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://www.opengis.net/wfs http://schemas.opengis.net/wfs/1.0.0/WFS-capabilities.xsd">
+
+<!-- MapServer version 7.0.0 OUTPUT=PNG OUTPUT=JPEG SUPPORTS=PROJ SUPPORTS=AGG SUPPORTS=FREETYPE SUPPORTS=CAIRO SUPPORTS=ICONV SUPPORTS=WMS_SERVER SUPPORTS=WMS_CLIENT SUPPORTS=WFS_SERVER SUPPORTS=WFS_CLIENT SUPPORTS=WCS_SERVER SUPPORTS=GEOS INPUT=JPEG INPUT=POSTGIS INPUT=OGR INPUT=GDAL INPUT=SHAPEFILE -->
+
+<Service>
+  <Name>MapServer WFS</Name>
+  <Title>Données publiques de l&#39;ONF en Métropole</Title>
+  <Abstract>Données publiques ONF</Abstract>
+  <Keywords>
+    infoFeatureAccessService
+  </Keywords>
+  <OnlineResource>http://ws.carmencarto.fr/WFS/105/ONF_Forets?</OnlineResource>
+  <Fees>Aucune condition ne s&#39;applique</Fees>
+  <AccessConstraints>Aucun obstacle technique</AccessConstraints>
+</Service>
+
+<Capability>
+  <Request>
+    <GetCapabilities>
+      <DCPType>
+        <HTTP>
+          <Get onlineResource="http://ws.carmencarto.fr/WFS/105/ONF_Forets?" />
+        </HTTP>
+      </DCPType>
+      <DCPType>
+        <HTTP>
+          <Post onlineResource="http://ws.carmencarto.fr/WFS/105/ONF_Forets?" />
+        </HTTP>
+      </DCPType>
+    </GetCapabilities>
+    <DescribeFeatureType>
+      <SchemaDescriptionLanguage>
+        <XMLSCHEMA/>
+      </SchemaDescriptionLanguage>
+      <DCPType>
+        <HTTP>
+          <Get onlineResource="http://ws.carmencarto.fr/WFS/105/ONF_Forets?" />
+        </HTTP>
+      </DCPType>
+      <DCPType>
+        <HTTP>
+          <Post onlineResource="http://ws.carmencarto.fr/WFS/105/ONF_Forets?" />
+        </HTTP>
+      </DCPType>
+    </DescribeFeatureType>
+    <GetFeature>
+      <ResultFormat>
+        <GML2/>
+        <SHAPE/>
+        <MIDMIF/>
+        <KML/>
+      </ResultFormat>
+      <DCPType>
+        <HTTP>
+          <Get onlineResource="http://ws.carmencarto.fr/WFS/105/ONF_Forets?" />
+        </HTTP>
+      </DCPType>
+      <DCPType>
+        <HTTP>
+          <Post onlineResource="http://ws.carmencarto.fr/WFS/105/ONF_Forets?" />
+        </HTTP>
+      </DCPType>
+    </GetFeature>
+  </Request>
+</Capability>
+
+<FeatureTypeList>
+  <Operations>
+    <Query/>
+  </Operations>
+    <FeatureType>
+        <Name>FOR_PUBL_FR</Name>
+        <Title>Forêts publiques</Title>
+        <SRS>EPSG:2154</SRS>
+        <LatLongBoundingBox minx="-247479" miny="6.03953e+06" maxx="1.54375e+06" maxy="7.11859e+06" />
+        <MetadataURL type="TC211" format="text/html">http://metadata.carmencarto.fr/geonetwork/105/catalog.search#/metadata/fr-662043116-7D3DC709-E1EB-470B-9FD0-8ABF8AAFD8E4</MetadataURL>
+<!-- WARNING: Required Feature Id attribute (fid) not specified for this feature type. Make sure you set one of wfs_featureid, ows_featureid or gml_featureid metadata. -->
+    </FeatureType>
+    <FeatureType>
+        <Name>PARC_PUBL_FR</Name>
+        <Title>Parcelles forestières</Title>
+        <SRS>EPSG:2154</SRS>
+        <LatLongBoundingBox minx="-247479" miny="6.03953e+06" maxx="1.54375e+06" maxy="7.11859e+06" />
+        <MetadataURL type="TC211" format="text/html">http://metadata.carmencarto.fr/geonetwork/105/catalog.search#/metadata/fr-662043116-82880F0D-E1C4-4EF3-80AF-416977F118F1</MetadataURL>
+<!-- WARNING: Required Feature Id attribute (fid) not specified for this feature type. Make sure you set one of wfs_featureid, ows_featureid or gml_featureid metadata. -->
+    </FeatureType>
+    <FeatureType>
+        <Name>DT_FR</Name>
+        <Title>Directions Territoriales</Title>
+        <SRS>EPSG:2154</SRS>
+        <LatLongBoundingBox minx="-247479" miny="6.03953e+06" maxx="1.54375e+06" maxy="7.11859e+06" />
+        <MetadataURL type="TC211" format="text/html">http://metadata.carmencarto.fr/geonetwork/105/catalog.search#/metadata/fr-662043116-E09B515E-01CF-4B80-B7B5-5535FE2E7A46</MetadataURL>
+<!-- WARNING: Required Feature Id attribute (fid) not specified for this feature type. Make sure you set one of wfs_featureid, ows_featureid or gml_featureid metadata. -->
+    </FeatureType>
+    <FeatureType>
+        <Name>ATE_FR</Name>
+        <Title>Agences Territoriales</Title>
+        <SRS>EPSG:2154</SRS>
+        <LatLongBoundingBox minx="-247479" miny="6.03953e+06" maxx="1.54375e+06" maxy="7.11859e+06" />
+        <MetadataURL type="TC211" format="text/html">http://metadata.carmencarto.fr/geonetwork/105/catalog.search#/metadata/fr-662043116-21FB1604-1C35-4A61-9288-72BC5A09E37A</MetadataURL>
+<!-- WARNING: Required Feature Id attribute (fid) not specified for this feature type. Make sure you set one of wfs_featureid, ows_featureid or gml_featureid metadata. -->
+    </FeatureType>
+    <FeatureType>
+        <Name>RB_FR</Name>
+        <Title>Réserves biologiques</Title>
+        <SRS>EPSG:2154</SRS>
+        <LatLongBoundingBox minx="-247479" miny="6.03953e+06" maxx="1.54375e+06" maxy="7.11859e+06" />
+        <MetadataURL type="TC211" format="text/html">http://metadata.carmencarto.fr/geonetwork/105/catalog.search#/metadata/fr-662043116-DC46592E-9D19-4182-84A0-4AC30E443725</MetadataURL>
+<!-- WARNING: Required Feature Id attribute (fid) not specified for this feature type. Make sure you set one of wfs_featureid, ows_featureid or gml_featureid metadata. -->
+    </FeatureType>
+    <FeatureType>
+        <Name>PRS_FR</Name>
+        <Title>Points de Rencontre des Secours</Title>
+        <SRS>EPSG:2154</SRS>
+        <LatLongBoundingBox minx="-247479" miny="6.03953e+06" maxx="1.54375e+06" maxy="7.11859e+06" />
+        <MetadataURL type="TC211" format="text/html">http://metadata.carmencarto.fr/geonetwork/105/catalog.search#/metadata/fr-662043116-F93F1825-68A2-4AE7-8C65-F789D26D9665</MetadataURL>
+<!-- WARNING: Required Feature Id attribute (fid) not specified for this feature type. Make sure you set one of wfs_featureid, ows_featureid or gml_featureid metadata. -->
+    </FeatureType>
+</FeatureTypeList>
+
+<ogc:Filter_Capabilities>
+  <ogc:Spatial_Capabilities>
+    <ogc:Spatial_Operators>
+      <ogc:Equals/>
+      <ogc:Disjoint/>
+      <ogc:Touches/>
+      <ogc:Within/>
+      <ogc:Overlaps/>
+      <ogc:Crosses/>
+      <ogc:Intersect/>
+      <ogc:Contains/>
+      <ogc:DWithin/>
+      <ogc:BBOX/>
+    </ogc:Spatial_Operators>
+  </ogc:Spatial_Capabilities>
+  <ogc:Scalar_Capabilities>
+    <ogc:Logical_Operators />
+    <ogc:Comparison_Operators>
+      <ogc:Simple_Comparisons />
+      <ogc:Like />
+      <ogc:Between />
+    </ogc:Comparison_Operators>
+  </ogc:Scalar_Capabilities>
+</ogc:Filter_Capabilities>
+
+</WFS_Capabilities>
