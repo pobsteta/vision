@@ -238,3 +238,18 @@ test('pièce § 9 : le tableau de lecture reprend les textes de la sonde', () =>
     assert.ok(qml.includes(f), `la sonde n'affiche pas : ${f}`);
   }
 });
+
+// ---------------------------------------------------------------------------------------------- aller-retour 3/3
+// Essai du 25 novembre 2026 sur le Samsung (QField 4.3.8) : « TypeError: Property 'deleteLater' of object QgsVectorLayer
+// … is not a function ». Qt 6.10.3 cache deleteLater() à QML (qtdeclarative src/qml/qml/qqmlpropertycache.cpp
+// l. 431-450, src/qml/jsruntime/qv4qobjectwrapper.cpp l. 1023-1059). La sonde ne doit plus appeler deleteLater
+// qu'à travers une libération sûre, qui ne lève jamais et le dit une fois dans le compte rendu.
+test('sonde (QML) : libération sûre, deleteLater seulement si c\'est une fonction, dit une seule fois', () => {
+  const s = sectionSonde();
+  const appels = s.match(/\.deleteLater\(\)/g) || [];
+  assert.equal(appels.length, 1, `deleteLater appelé ${appels.length} fois (une seule, dans sondeLiberer)`);
+  assert.match(s, /function sondeLiberer\(c\) \{[\s\S]*?typeof c\.deleteLater === "function"\) c\.deleteLater\(\);/);
+  assert.ok(s.includes('libération impossible (deleteLater absent)'));
+  assert.ok(s.includes('sondeLibererSignale'), 'la ligne n\'est écrite qu\'une fois par sonde');
+  assert.ok((s.match(/sondeLiberer\(/g) || []).length >= 7, 'chaque couche ouverte par la sonde est libérée par sondeLiberer');
+});

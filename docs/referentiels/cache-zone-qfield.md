@@ -366,3 +366,38 @@ après `node --test` ; la version reste 0.6.0 (une fusion par erreur sur `main` 
 
 Ce que la sonde **ne** prouve **pas** : le rendu des styles, le rechargement à la réouverture du projet, la tenue au
 plafond sur une vraie grosse zone (prototype de cache, après la sonde).
+
+## 10. Essai n° 1 de la sonde (25 novembre 2026, Samsung, QField **4.3.8**)
+
+Bouton « massif de la Serre » (compte rendu transmis par l'orchestrateur) :
+
+- **Prouvé sur l'appareil** : `fixture.gml` écrit dans `vision-imports/_sonde-053/` ; **pilote GML présent** (couche
+  valide, 2 objets, EPSG:2154, polygone, WKB 6 MultiPolygon) ; **accents justes** (2/2). La condition de la voie B
+  (§ 1.3) est levée ; l'encodage du vrai GML de l'ONF reste à voir.
+- **Arrêt** : `TypeError: Property 'deleteLater' of object QgsVectorLayer(…) is not a function`, avant le GeoPackage
+  et le réseau. Corrigé dans la sonde (aller-retour 3/3) : libération sûre `sondeLiberer`, qui le dit une fois.
+- **Champ `coordinates`** : sans schéma, le pilote GML de GDAL prend le `gml:boundedBy/gml:Box/gml:coordinates` de
+  chaque objet pour un attribut (fichier `.gfs` écrit à côté : `ElementPath` `boundedBy|Box|coordinates`, vu ici avec
+  GDAL 3.8.4). Le fichier d'essai a cette boîte par objet comme les réponses de MapServer 7 : le vrai GML l'aura aussi,
+  sauf si GDAL lit le schéma désigné par `schemaLocation` (DescribeFeatureType). Le prototype de cache devra écarter
+  ce champ (et `gml_id`) ou fournir un `.gfs` ; la sonde le montrera sur les vraies réponses.
+
+### Pourquoi `deleteLater` n'existe pas en QML
+
+- Qt 6.10.3 (port `qtdeclarative` de QField : `vcpkg/ports/qtdeclarative/vcpkg.json` l. 3) **cache à QML** le slot
+  `QObject::deleteLater()` et le signal `destroyed()` : `src/qml/qml/qqmlpropertycache.cpp` l. 431-450 et l. 817-826
+  (« Used to block access to QObject::destroyed() and QObject::deleteLater() from QML »),
+  `src/qml/jsruntime/qv4qobjectwrapper.cpp` l. 1023-1059. Ce n'est pas propre à `QgsVectorLayer` : aucun `QObject`
+  n'a `deleteLater` en QML. Le commentaire de la mission 049 (« deleteLater, slot de QObject ») était faux.
+- L'autre voie de QML, `destroy()`, refuse un objet en `CppOwnership` : `loadVectorLayer` pose cette propriété
+  (`QF qflayerutils.cpp` l. 618) ; `setObjectOwnership(CppOwnership)` met `indestructible = true`
+  (`src/qml/jsapi/qjsengine.cpp` l. 1324-1335) et `destroy()` lève alors « Invalid attempt to destroy() an
+  indestructible object » (`qv4qobjectwrapper.cpp` l. 2994-2996 ; `qqmldata_p.h` l. 242-247).
+- **Seule voie de libération lue, accessible au plugin** : donner la couche au projet puis l'en retirer.
+  `ProjectUtils.addMapLayer` → `QgsProject::addMapLayer`, qui en prend la propriété (`setParent( this )`,
+  `QG src/core/qgsmaplayerstore.cpp` l. 110-113) ; `ProjectUtils.removeMapLayer` la détruit (`delete lyr` si elle lui
+  appartient, l. 183-186). Prix : la couche passe un instant dans la liste des couches et la carte (signaux du projet,
+  rendu), et une couche **invalide** n'est peut-être pas acceptée (non lu en entier). **Non essayé**, à ne pas suivre
+  sans décision.
+- Sinon : ne rien libérer. Les couches ouvertes restent en mémoire (et leurs fichiers ouverts) jusqu'à la fermeture
+  de QField ; pour une sonde ou un import ponctuel, c'est une fuite bornée.

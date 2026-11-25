@@ -484,6 +484,22 @@ Item {
   property bool sondeEnCours: false
   property var sondeLignes: []
 
+  property bool sondeLibererSignale: false
+
+  // Libération sûre d'une couche ouverte par la sonde (CppOwnership, qflayerutils.cpp l. 618). Essai du 25 novembre 2026
+  // (QField 4.3.8) : deleteLater n'est pas une fonction en QML, Qt le cache (qtdeclarative 6.10.3,
+  // src/qml/qml/qqmlpropertycache.cpp l. 431-450). Ne lève jamais ; dit une fois par sonde que la libération est impossible.
+  function sondeLiberer(c) {
+    if (!c) return;
+    try {
+      if (typeof c.deleteLater === "function") c.deleteLater();
+      else if (!sondeLibererSignale) {
+        sondeLibererSignale = true;
+        sondeNoter("  libération impossible (deleteLater absent) : les couches ouvertes par la sonde restent en mémoire jusqu'à la fermeture de QField");
+      }
+    } catch (e) { /* sans effet sur la sonde */ }
+  }
+
   function sondeNoter(ligne) {
     sondeLignes.push(String(ligne));
     sondeTexte = sondeLignes.join("\n");
@@ -492,6 +508,7 @@ Item {
   function sondeDebut(titre) {
     sondeLignes = [];
     sondeTexte = "";
+    sondeLibererSignale = false;
     sondeNoter("Sonde ONF (" + Logique.SONDE_ONF.version + ", outil d'essai) : " + titre);
     sondeNoter("Date : " + new Date().toISOString() + " ; Vision " + versionPlugin + " ; QField " + (versionQField() || "version inconnue"));
   }
@@ -538,7 +555,7 @@ Item {
     try { c = LayerUtils.loadVectorLayer(chemin, nom); } catch (e) { c = null; }
     if (!c || !c.isValid) {
       sondeNoter("  " + nom + " : ouverture du GML ÉCHOUÉE (pilote GML absent, ou fichier illisible)");
-      if (c) c.deleteLater();
+      sondeLiberer(c);
       return false;
     }
     let champs = [];
@@ -568,7 +585,7 @@ Item {
     // GeoPackage d'essai, nom horodaté (aucun fichier encore ouvert n'est écrasé) ; table = nom du fichier (qflayerutils.cpp l. 705).
     const base = nom + "-" + Date.now();
     const ecrit = String(LayerUtils.saveVectorLayerAs(c, dossier + "/" + base + ".gpkg", "GPKG") || "");
-    c.deleteLater();
+    sondeLiberer(c);
     if (ecrit === "") {
       sondeNoter("  " + nom + " : réécriture en GeoPackage REFUSÉE (raison dans le journal de QField)");
       return true;
@@ -586,7 +603,7 @@ Item {
         it2.close();
       }
     } catch (e) { m = -1; }
-    if (g) g.deleteLater();
+    sondeLiberer(g);
     sondeNoter("  " + nom + " : GeoPackage " + ecrit + " : " + (m < 0 ? "illisible" : m + " objets relus, type de géométrie " + typeRelu) + (m >= 0 && m !== n ? " (ÉCART avec le GML)" : ""));
     return true;
   }
@@ -599,13 +616,13 @@ Item {
     try { l = LayerUtils.loadVectorLayer(Logique.sondeUriWfs(couche), couche, "WFS"); } catch (e) { l = null; }
     if (!l || !l.isValid) {
       sondeNoter("  " + couche + " : voie A, couche WFS invalide (" + (Date.now() - t0) + " ms)");
-      if (l) l.deleteLater();
+      sondeLiberer(l);
       return;
     }
     sondeNoter("  " + couche + " : voie A, couche WFS valide, type de géométrie " + sondeGeometrie(l));
     const base = couche + "-voieA-" + Date.now();
     const ecrit = String(LayerUtils.saveVectorLayerAs(l, dossier + "/" + base + ".gpkg", "GPKG", Logique.sondeExpressionEmprise(emprise)) || "");
-    l.deleteLater();
+    sondeLiberer(l);
     let m = -1;
     let typeA = "illisible";
     if (ecrit !== "") {
@@ -620,7 +637,7 @@ Item {
           it.close();
         }
       } catch (e) { m = -1; }
-      if (g) g.deleteLater();
+      sondeLiberer(g);
     }
     sondeNoter("  " + couche + " : voie A, " + (ecrit === "" ? "écriture REFUSÉE" : ecrit + " : " + (m < 0 ? "illisible" : m + " objets, type de géométrie " + typeA)) + ", " + ((Date.now() - t0) / 1000).toFixed(1) + " s");
   }
