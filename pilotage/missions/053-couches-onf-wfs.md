@@ -94,3 +94,5 @@ du point de secours visibles (sinon, signaler).
 
 - **Relecteur :** `relecteur` après chaque étape, puis Pascal (PR vers `main`).
 - **Tranche :** Pascal (arbitrage après l'étape 1, ADR 0010, PR).
+
+**Redite par l'agent (dev, étape 1, 25 novembre 2026) :** Livrer un outil testé et un workflow manuel GitHub Actions qui mesurent, pour les forêts publiques, les parcelles forestières et les points de rencontre des secours du WFS de l'ONF, les champs, volumes et métadonnées et leur compatibilité avec les trois styles de Pascal, sans toucher à `vision.qgz`, afin que Pascal arbitre ensuite la copie locale sur des mesures.

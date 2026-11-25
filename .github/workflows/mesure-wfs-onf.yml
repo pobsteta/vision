@@ -1,0 +1,46 @@
+# Mission 053, étape 1 : mesure du service WFS de l'ONF (http://ws.carmencarto.fr/WFS/105/ONF_Forets?).
+# Le service ne répond qu'en http ; la session cloud de l'équipe ne le joint pas, GitHub Actions oui.
+# Lancement manuel seulement. Ce workflow ne publie rien (ni release, ni commit, ni push) : il range le
+# rapport (JSON + Markdown), les pièces brutes (GetCapabilities, DescribeFeatureType, fiches de métadonnées,
+# hits, journaux) et les trois .gpkg en ARTEFACT à courte rétention. Les pièces utiles sont ensuite versées à la
+# main dans docs/referentiels/brut/onf/ et résumées dans docs/referentiels/onf-wfs.md.
+# Les trois .gpkg sont des données publiques de l'ONF ; ils servent à mesurer, rien n'est livré.
+# Outil testé : outils/mesure-wfs-onf.mjs. Aucune clé, aucun secret.
+name: Mesure du WFS de l'ONF
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mesurer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: GDAL (ogr2ogr, ogrinfo)
+        run: sudo apt-get update && sudo apt-get install -y gdal-bin
+      - name: Tests de l'outil (hors réseau)
+        run: node --test tests/mesure-wfs-onf.test.mjs
+      - name: Mesure du service
+        # Un échec (champ manquant, service muet) ne doit pas empêcher de ranger ce qui a été mesuré.
+        continue-on-error: true
+        run: |
+          ogr2ogr --version
+          node outils/mesure-wfs-onf.mjs mesure-onf | tee mesure-onf.log
+      - name: Résumé
+        if: always()
+        run: |
+          if [ -f mesure-onf/rapport.md ]; then cat mesure-onf/rapport.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Artefact (rapport, pièces brutes, .gpkg)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesure-wfs-onf
+          path: |
+            mesure-onf/
+            mesure-onf.log
+          retention-days: 7
+          if-no-files-found: warn
