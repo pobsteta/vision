@@ -11,7 +11,8 @@ import { dirname, join } from 'node:path';
 import {
   COUCHES, analyserCapabilities, analyserDescribeFeatureType, champsDuStyle,
   comparerChampsStyle, hitsDepuisReponse, statutComptage, resumerOgrinfo, rapportMarkdown,
-  argsOgr2ogr, urlGetFeatureHits,
+  argsOgr2ogr, urlGetFeatureHits, estException, versionAnnoncee, urlsCapabilities,
+  uuidMetadonnee, urlsMetadonnees, TAILLE_PAGE,
 } from '../outils/mesure-wfs-onf.mjs';
 
 const racine = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -157,30 +158,90 @@ test('ogrinfo -json : sans système ni emprise, on le dit (null) au lieu d\'inve
   assert.deepEqual(resumerOgrinfo({}).champs, []);
 });
 
-test('URL hits : WFS 1.0.0, couche demandée, encodée', () => {
+test('URL hits : comptage en WFS 1.1.0 (MapServer 7 n\'écrit numberOfFeatures qu\'en 1.1.0), couche encodée', () => {
   const u = urlGetFeatureHits('http://h/x?', 'PRS_FR');
   assert.match(u, /^http:\/\/h\/x\?/);
   assert.match(u, /SERVICE=WFS/);
-  assert.match(u, /VERSION=1\.0\.0/);
+  assert.match(u, /VERSION=1\.1\.0/);
   assert.match(u, /REQUEST=GetFeature/);
   assert.match(u, /TYPENAME=PRS_FR/);
   assert.match(u, /RESULTTYPE=hits/);
+  assert.match(urlGetFeatureHits('http://h/x?', 'PRS_FR', '2.0.0'), /VERSION=2\.0\.0/);
 });
 
-test('ogr2ogr : GeoPackage, WFS 1.0.0, une seule couche, pas de réécriture de système', () => {
+test('hits : formes produites par MapServer 7 (1.1.0 et 2.0.0)', () => {
+  const v110 = '<?xml version="1.0"?>\n<wfs:FeatureCollection xmlns:ms="http://mapserver.gis.umn.edu/mapserver" xmlns:wfs="http://www.opengis.net/wfs" numberOfFeatures="4321" timeStamp="2026-11-25T10:00:00"/>';
+  const v200 = '<wfs:FeatureCollection xmlns:wfs="http://www.opengis.net/wfs/2.0" timeStamp="x" numberMatched="987" numberReturned="0"/>';
+  assert.equal(hitsDepuisReponse(v110), 4321);
+  assert.equal(hitsDepuisReponse(v200), 987);
+  assert.equal(hitsDepuisReponse('<wfs:FeatureCollection numberMatched="unknown" numberReturned="0"/>'), null);
+});
+
+test('exception de service renvoyée en HTTP 200 : reconnue', () => {
+  assert.equal(estException('<?xml version="1.0"?><ServiceExceptionReport version="1.2.0"><ServiceException code="x">msg</ServiceException></ServiceExceptionReport>'), true);
+  assert.equal(estException('<ows:ExceptionReport xmlns:ows="x"><ows:Exception exceptionCode="y"/></ows:ExceptionReport>'), true);
+  assert.equal(estException('<WFS_Capabilities version="1.0.0"/>'), false);
+  assert.equal(estException(CAPS), false);
+  assert.equal(estException(null), false);
+});
+
+test('version annoncée par une réponse GetCapabilities (WFS_Capabilities ou ows)', () => {
+  assert.deepEqual(versionAnnoncee(CAPS), { version: '1.0.0', exception: false });
+  assert.deepEqual(versionAnnoncee('<wfs:WFS_Capabilities version="2.0.0" xmlns:wfs="x"/>'), { version: '2.0.0', exception: false });
+  assert.deepEqual(versionAnnoncee('<ServiceExceptionReport><ServiceException/></ServiceExceptionReport>'), { version: null, exception: true });
+  assert.deepEqual(versionAnnoncee(null), { version: null, exception: false });
+});
+
+test('GetCapabilities : sans VERSION, 1.0.0, 1.1.0, 2.0.0', () => {
+  const u = urlsCapabilities('http://h/x?');
+  assert.deepEqual(u.map((x) => x.demandee), [null, '1.0.0', '1.1.0', '2.0.0']);
+  assert.ok(!/VERSION=/.test(u[0].url));
+  assert.match(u[0].url, /REQUEST=GetCapabilities/);
+  assert.match(u[3].url, /VERSION=2\.0\.0/);
+});
+
+test('fiche de métadonnées : l\'uuid du fragment #/metadata/<uuid>, que fetch coupe', () => {
+  const m = 'http://metadata.carmencarto.fr/geonetwork/105/catalog.search#/metadata/fr-662043116-F93F1825-68A2-4AE7-8C65-F789D26D9665';
+  assert.equal(uuidMetadonnee(m), 'fr-662043116-F93F1825-68A2-4AE7-8C65-F789D26D9665');
+  assert.equal(uuidMetadonnee('http://x/y'), null);
+  const u = urlsMetadonnees(m);
+  assert.ok(u.length >= 2);
+  assert.ok(u.every((x) => x.url.includes('fr-662043116-F93F1825-68A2-4AE7-8C65-F789D26D9665')));
+  assert.ok(u.every((x) => x.url.startsWith('http://metadata.carmencarto.fr/geonetwork/')));
+  assert.deepEqual(urlsMetadonnees('http://x/y'), []);
+});
+
+test('ogr2ogr : GeoPackage, WFS 1.0.0 dans l\'URL (pas d\'option -oo VERSION), une couche, système tel que servi', () => {
   const a = argsOgr2ogr('http://h/x?', 'PRS_FR', '/s/PRS_FR.gpkg');
   assert.deepEqual(a.slice(0, 2), ['-f', 'GPKG']);
   assert.ok(a.includes('/s/PRS_FR.gpkg'));
-  assert.ok(a.includes('WFS:http://h/x?'));
+  assert.ok(a.includes('WFS:http://h/x?VERSION=1.0.0'));
   assert.ok(a.includes('PRS_FR'));
-  assert.ok(a.some((x) => /VERSION=1\.0\.0/.test(x)));
+  assert.ok(!a.includes('-oo'), 'le pilote WFS ignore -oo VERSION');
+  assert.ok(!a.some((x) => /^VERSION=/.test(x)));
   assert.ok(!a.includes('-t_srs') && !a.includes('-a_srs'), 'on mesure le système tel que servi');
+});
+
+test('ogr2ogr : pas de gml_id exposé (MapServer n\'en écrit pas ; il serait NOT NULL dans le GeoPackage)', () => {
+  const a = argsOgr2ogr('http://h/x?', 'PRS_FR', '/s/x.gpkg');
+  const i = a.indexOf('GML_EXPOSE_GML_ID');
+  assert.ok(i > 0 && a[i - 1] === '--config' && a[i + 1] === 'NO');
+});
+
+test('ogr2ogr : pagination STARTINDEX/MAXFEATURES demandée à GDAL', () => {
+  assert.equal(TAILLE_PAGE, 5000);
+  const a = argsOgr2ogr('http://h/x?', 'PRS_FR', '/s/PRS_FR.gpkg');
+  const i = a.indexOf('OGR_WFS_PAGING_ALLOWED');
+  assert.ok(i > 0 && a[i - 1] === '--config' && a[i + 1] === 'ON');
+  const j = a.indexOf('OGR_WFS_PAGE_SIZE');
+  assert.ok(j > 0 && a[j - 1] === '--config' && a[j + 1] === String(TAILLE_PAGE));
 });
 
 test('rapport Markdown : ce qui manque est écrit en clair, pas masqué', () => {
   const rapport = {
     date: '2026-11-25T10:00:00Z', service: 'http://h/x?',
     capabilities: { titre: 'T', fees: 'F' },
+    versionsServies: [{ demandee: null, annoncee: '1.0.0', exception: false, http: 200 }, { demandee: '2.0.0', annoncee: null, exception: true, http: 200 }],
     couches: [{
       nom: 'FOR_PUBL_FR', titre: 'Forêts publiques', metadataUrl: 'http://m',
       hits: null, comptage: { statut: 'inconnu', message: 'risque de troncature' },
@@ -201,4 +262,6 @@ test('rapport Markdown : ce qui manque est écrit en clair, pas masqué', () => 
   assert.match(md, /risque de troncature/);
   assert.match(md, /téléchargement : échec/);
   assert.match(md, /NB/);
+  assert.match(md, /Versions WFS/);
+  assert.match(md, /2\.0\.0.*exception/i);
 });
