@@ -25,7 +25,7 @@ test('vision.qgz du dépôt = sortie du script avec l\'UUID par défaut (sauf si
 test('arbre : un groupe « Fonds de carte » coché et déplié contient Cadastre, Plan IGN v2, OpenStreetMap, OpenTopoMap puis BD ORTHO (mission 045)', () => {
   const qgs = ecrireQgs();
   const arbre = qgs.match(/<layer-tree-group>([\s\S]*?)<\/layer-tree-group>\s*<snapping/)[1];
-  const g = arbre.match(/<layer-tree-group ([^>]*)>([\s\S]*?)<\/layer-tree-group>/);
+  const g = arbre.match(/<layer-tree-group (name="Fonds de carte"[^>]*)>([\s\S]*?)<\/layer-tree-group>/); // le groupe « ONF » (mission 053) est testé dans couches-onf-projet-modele.test.mjs
   assert.ok(g, 'groupe imbriqué absent');
   assert.match(g[1], /name="Fonds de carte"/);
   assert.match(g[1], /checked="Qt::Checked"/);
@@ -33,15 +33,17 @@ test('arbre : un groupe « Fonds de carte » coché et déplié contient Cadastr
   const noms = [...g[2].matchAll(/<layer-tree-layer [^>]*name="([^"]*)"[^>]*checked="([^"]*)"/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(noms, [['Cadastre', 'Qt::Checked'], ['Plan IGN v2', 'Qt::Checked'], ['OpenStreetMap', 'Qt::Unchecked'], ['OpenTopoMap', 'Qt::Unchecked'], ['BD ORTHO', 'Qt::Unchecked']]);
   // les fonds ne sont plus à la racine ; seule y reste la couche « Saisie terrain » (mission 021, hors du groupe)
-  assert.equal([...arbre.matchAll(/<layer-tree-layer /g)].length, 6);
+  assert.equal([...arbre.matchAll(/<layer-tree-layer /g)].length, 9); // Saisie terrain + 3 couches ONF + 5 fonds
   const racineSaisie = arbre.match(/^\s*<customproperties>[\s\S]*?<\/customproperties>\s*<layer-tree-layer id="([^"]*)" name="Saisie terrain"/);
   assert.ok(racineSaisie, 'la couche « Saisie terrain » est la première feuille de la racine, avant le groupe');
   // ordre de rendu cohérent
   const ids = [...g[2].matchAll(/<layer-tree-layer id="([^"]*)"/g)].map((m) => m[1]);
   const ordre = [...qgs.match(/<layerorder>([\s\S]*?)<\/layerorder>/)[1].matchAll(/<layer id="([^"]*)"/g)].map((m) => m[1]);
-  assert.deepEqual(ordre, [racineSaisie[1], ...ids]); // la saisie au-dessus des fonds
+  const onf = [...arbre.match(/<layer-tree-group name="ONF"[\s\S]*?<\/layer-tree-group>/)[0].matchAll(/<layer-tree-layer id="([^"]*)"/g)].map((m) => m[1]);
+  assert.equal(onf.length, 3);
+  assert.deepEqual(ordre, [racineSaisie[1], ...onf, ...ids]); // la saisie, puis les couches ONF, au-dessus des fonds
   const perso = [...qgs.match(/<custom-order[^>]*>([\s\S]*?)<\/custom-order>/)[1].matchAll(/<item>([^<]*)<\/item>/g)].map((m) => m[1]);
-  assert.deepEqual(perso, [racineSaisie[1], ...ids]);
+  assert.deepEqual(perso, [racineSaisie[1], ...onf, ...ids]);
 });
 
 test('sources XYZ : URL, zoom et attribution de chacun des cinq fonds, aucune clé (mission 045)', () => {

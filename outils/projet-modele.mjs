@@ -21,6 +21,7 @@ import { writeFileSync, rmSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { deflateRawSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import { STYLES_ONF } from '../plugin/vision-styles-onf.mjs'; // mission 053 : mêmes styles adaptés que le cache du plugin (générés depuis les .qml de Pascal)
 
 export const VISION_ID_PAR_DEFAUT = 'd98bf4b8-0fac-4dac-85cf-58e6701aceeb';
 export const VERSION_QGIS = '3.34.0-Prizren'; // version d'écriture déclarée (LTR) ; QGIS la met à jour à l'enregistrement
@@ -110,6 +111,70 @@ function maplayer(f) {
       <map-layer-style-manager current="default"><map-layer-style name="default"/></map-layer-style-manager>
       <attribution>${xml(f.attribution)}</attribution>
       <attributionUrl></attributionUrl>
+    </maplayer>`;
+}
+
+// ---------- Mission 053, étape 2 : groupe « ONF », trois couches WFS en ligne (arbitrages n° 2 à 4 de Pascal, 25 novembre 2026) ----------
+// Fiche pilotage/missions/053-couches-onf-wfs.md ; mesure docs/referentiels/brut/onf/mesure-2026-11-25.md ; docs/referentiels/cache-zone-qfield.md.
+// Version WFS : 1.0.0 imposée (version='1.0.0'), pas « auto ». Raisons : (1) c'est la version prouvée sur le Samsung (sonde, essais n° 1 à 4 :
+// GetFeature 1.0.0 + BBOX, GML lu, réécrit, relu) et celle que le plugin demande (plugin/vision-logique.mjs) ; (2) sans clé « version », le
+// fournisseur WFS négocie : GetCapabilities avec ACCEPTVERSIONS=2.0.0,1.1.0,1.0.0 (QGIS 3a92eb3 src/providers/wfs/qgswfsdatasourceuri.cpp l. 331-335
+// version() rend « auto » ; qgswfsgetcapabilities.cpp l. 56-58), forme que la mesure n° 1 n'a pas essayée (elle a demandé VERSION=x, pas
+// ACCEPTVERSIONS) ; (3) les 3 versions sont servies sans exception, mais 1.1.0 et 2.0.0 ajoutent l'ordre des axes (urn EPSG) et la pagination, non
+// prouvés sur l'appareil. Prix de tenir 1.0.0 : pas de pagination ni de comptage (hits) côté fournisseur (supportsPaging et supportsHits viennent du
+// GetCapabilities, qgswfsgetcapabilities.cpp l. 179, 241, 313) ; la requête est limitée par restrictToRequestBBOX='1' (qgswfsdatasourceuri.cpp
+// l. 467-468, clé connue l. 186) à l'emprise visible, d'où le seuil des parcelles et des points (1:50 000, posé dans le style).
+// Clés de l'URI : url, typename, version, srsname, restrictToRequestBBOX (qgswfsconstants.cpp l. 28-53 ; liste des clés connues
+// qgswfsdatasourceuri.cpp l. 175-200). Écrites par ordre alphabétique de clé, comme QgsDataSourceUri::uri().
+// Non prouvé : l'affichage de ces couches dans QField 4.3.8 (fournisseur WFS de QGIS sur Android) : essai de Pascal (cache-zone-qfield.md § 13).
+export const GROUPE_ONF = 'ONF';
+export const SERVICE_ONF = 'http://ws.carmencarto.fr/WFS/105/ONF_Forets';
+export const VERSION_WFS_ONF = '1.0.0';
+export const ATTRIBUTION_ONF = '© ONF';
+// Du dessus au dessous : les points au-dessus des parcelles, elles-mêmes au-dessus des forêts. Emprises : mesure n° 1 (EPSG:2154, ordre x puis y).
+// Mêmes noms que les couches du cache du plugin (Pascal, 25 novembre 2026) : le plugin ne retrouve ni ne retire une couche du cache par son nom, seulement par les marques vision/cache et vision/couche (Vision.qml coucheDuCache, retirerCacheDeLaCarte, coucheDuProjet). Seuil : parcelles et points en deçà du 1:50 000
+// (dans le style adapté), forêts toujours visibles ; toutes cochées (arbitrage n° 2).
+export const COUCHES_ONF = [
+  { couche: 'PRS_FR', nom: 'Points de secours (© ONF)', geometrie: 'Point', emprise: [140481.019, 6092810.07075, 1225571.643, 7083465], visible: true },
+  { couche: 'PARC_PUBL_FR', nom: 'Parcelles forestières (© ONF)', geometrie: 'Polygon', emprise: [126014.2, 6137906.3, 1206122.9, 7085843.4], visible: true },
+  { couche: 'FOR_PUBL_FR', nom: 'Forêts publiques (© ONF)', geometrie: 'Polygon', emprise: [126014.2, 6061982.5, 1239155.4, 7085843.4], visible: true },
+];
+export const sourceOnf = (c) => `restrictToRequestBBOX='1' srsname='EPSG:2154' typename='${c.couche}' url='${SERVICE_ONF}' version='${VERSION_WFS_ONF}'`;
+const idOnf = (c) => idCouche({ nom: c.couche });
+
+function maplayerOnf(c) {
+  const style = STYLES_ONF[c.couche];
+  const m = /<qgis ([^>]*)>([\s\S]*)<\/qgis>\s*$/.exec(style);
+  if (!m) throw new Error(`style ONF ${c.couche} : élément <qgis> introuvable`);
+  // Attributs du style (échelles, étiquettes, simplification) repris tels quels sur la couche, sauf version (de QGIS) et readOnly (lecture seule).
+  const attrs = [...m[1].matchAll(/(\w+)="([^"]*)"/g)].filter((a) => a[1] !== 'version' && a[1] !== 'readOnly').map((a) => `${a[1]}="${a[2]}"`);
+  const [x0, y0, x1, y1] = c.emprise;
+  return `    <maplayer ${attrs.join(' ')} geometry="${c.geometrie}" readOnly="1" type="vector">
+      <extent><xmin>${x0}</xmin><ymin>${y0}</ymin><xmax>${x1}</xmax><ymax>${y1}</ymax></extent>
+      <id>${idOnf(c)}</id>
+      <datasource>${xml(sourceOnf(c))}</datasource>
+      <keywordList><value></value></keywordList>
+      <layername>${xml(c.nom)}</layername>
+      <srs>${SRS_2154}</srs>
+      <resourceMetadata>
+        <identifier></identifier>
+        <parentidentifier></parentidentifier>
+        <language></language>
+        <type></type>
+        <title>${xml(c.nom)}</title>
+        <abstract></abstract>
+        <links/>
+        <fees></fees>
+        <encoding></encoding>
+        <crs>${SRS_2154}</crs>
+        <extent/>
+        <rights>${xml(ATTRIBUTION_ONF)}</rights>
+      </resourceMetadata>
+      <provider encoding="UTF-8">WFS</provider>
+      <map-layer-style-manager current="default"><map-layer-style name="default"/></map-layer-style-manager>
+      <attribution>${xml(ATTRIBUTION_ONF)}</attribution>
+      <attributionUrl></attributionUrl>
+${m[2].replace(/^\n+/, '').replace(/\n+$/, '')}
     </maplayer>`;
 }
 
@@ -269,12 +334,21 @@ export function ecrireQgs(visionId = VISION_ID_PAR_DEFAUT) {
       <customproperties><Option/></customproperties>
     </layer-tree-layer>
 `;
-  const arbre = feuilleSaisie + `    <layer-tree-group name="${xml(GROUPE_FONDS)}" checked="Qt::Checked" expanded="1">
+  const feuillesOnf = COUCHES_ONF.map((c) => `      <layer-tree-layer id="${idOnf(c)}" name="${xml(c.nom)}" source="${xml(sourceOnf(c))}" providerKey="WFS" expanded="1" checked="${c.visible ? 'Qt::Checked' : 'Qt::Unchecked'}" legend_exp="" patch_size="-1,-1" legend_split_behavior="0">
+        <customproperties><Option/></customproperties>
+      </layer-tree-layer>`).join('\n');
+  const groupeOnf = `    <layer-tree-group name="${xml(GROUPE_ONF)}" checked="Qt::Checked" expanded="1">
+      <customproperties><Option/></customproperties>
+${feuillesOnf}
+    </layer-tree-group>
+`;
+  const arbre = feuilleSaisie + groupeOnf + `    <layer-tree-group name="${xml(GROUPE_FONDS)}" checked="Qt::Checked" expanded="1">
       <customproperties><Option/></customproperties>
 ${feuilles}
     </layer-tree-group>
     <custom-order enabled="0">
       <item>${idSaisie()}</item>
+${COUCHES_ONF.map((c) => `      <item>${idOnf(c)}</item>`).join('\n')}
 ${FONDS.map((f) => `      <item>${idCouche(f)}</item>`).join('\n')}
     </custom-order>`;
   // has-checked-group-info="1" + checked-group-nodes : appliquer le thème recoche le groupe « Fonds de carte » (QGIS 3a92eb3,
@@ -313,10 +387,12 @@ ${arbre}
   <legend updateDrawingOrder="true"/>
   <projectlayers>
 ${maplayerSaisie()}
+${COUCHES_ONF.map(maplayerOnf).join('\n')}
 ${FONDS.map(maplayer).join('\n')}
   </projectlayers>
   <layerorder>
     <layer id="${idSaisie()}"/>
+${COUCHES_ONF.map((c) => `    <layer id="${idOnf(c)}"/>`).join('\n')}
 ${FONDS.map((f) => `    <layer id="${idCouche(f)}"/>`).join('\n')}
   </layerorder>
   <properties>

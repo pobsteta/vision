@@ -544,3 +544,17 @@ place depuis l'aller-retour 1/3.
   nommé `_cache-onf.zip` ; l'attribution (§ 12).
 - README § 3 : le bouton du cache, ce qu'il faut de réseau, ce qui revient en mode avion, la ligne du panneau ; la version
   du plugin (« Le plugin 0.x.0 (sur `main`) », vérifiée par `tests/readme.test.mjs`).
+
+### 13.1 Étape 2 : couches WFS du projet modèle, ce qui n'est pas prouvé (25 novembre 2026)
+
+`vision.qgz` déclare maintenant, dans le groupe « ONF », les trois couches WFS (`outils/projet-modele.mjs` ; fournisseur `WFS`,
+`version='1.0.0'`, `srsname='EPSG:2154'`, `restrictToRequestBBOX='1'`, lecture seule, mêmes noms que le cache). **Non prouvé** :
+
+- **l'affichage de ces couches dans QField 4.3.8 sur Android** : le fournisseur WFS de QGIS, chargé depuis le projet (voie A de § 1.2),
+  n'a été essayé nulle part ; la sonde et le cache ont prouvé la voie B (`GetFeature` + `BBOX` par le plugin, GML réécrit en GeoPackage),
+  non le fournisseur. À essayer par Pascal : projet ouvert avec réseau, forêts visibles, zoom en deçà du 1:50 000 pour parcelles et
+  points, GetCapabilities et DescribeFeatureType de la couche lus par le fournisseur en `version='1.0.0'` ;
+- les **flèches SVG** du style des points (`arrows/Arrow_01.svg`) dans QField Android ;
+- le **poids d'une requête** des forêts « toujours visibles » à petite échelle (177 Mo pour toute la métropole, mesure n° 1) : rien ne plafonne
+  la requête hors de `restrictToRequestBBOX` ; la clé `maxNumFeatures` existe (§ 1.2) et n'est pas posée (arbitrage de Pascal requis) ;
+- en mode avion, ces trois couches n'affichent rien (en ligne seulement) ; le cache de zone prend le relais.
