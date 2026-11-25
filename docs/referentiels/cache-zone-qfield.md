@@ -565,3 +565,125 @@ place depuis l'aller-retour 1/3.
   **rien d'autre ne plafonne la requête** (`maxNumFeatures` non posée) ; à 1:250 000, une requête de forêts couvre encore une grande zone, **non
   mesurée**. Pour les couches du **cache**, les forêts restent toujours visibles (zone de 20 km au plus, 5 000 objets) ;
 - en mode avion, ces trois couches n'affichent rien (en ligne seulement) ; le cache de zone prend le relais.
+
+## 14. Étape 3, temps 1 : groupe « ONF Cache » par la voie C4 (preuve avant code, aucune ligne de plugin)
+
+Rédigé par le `dev` le 25 novembre 2026. Demande de Pascal : le groupe « ONF » de `vision.qgz` devient « ONF WFS » (au temps 2) ;
+un groupe « ONF Cache » reçoit les trois couches du cache au lieu de la tête de liste. Un plugin ne peut ni créer un groupe
+ni y ranger une couche (§ 4) : le projet modèle doit porter le groupe et trois couches GeoPackage à chemin fixe, que le plugin
+remplit (voie C4, § 1.4). Sources : QField v4.3.7, QGIS 3a92eb3 (`QF`, `QG`), comme plus haut. **Tout est lu, rien n'est
+essayé.**
+
+### 14.1 Faire relire une couche du projet après changement de son fichier
+
+| Appel | Exposé à QML ? | Effet |
+|---|---|---|
+| `couche.reload()` | **oui** : `Q_INVOKABLE virtual void reload()` (`QG src/core/qgsmaplayer.h` l. 556) | `QgsVectorLayer::reload` (`QG src/core/vector/qgsvectorlayer.cpp` l. 437-447) : `mDataProvider->reloadData()` puis `updateFields()`. Pour OGR, `reloadProviderData` (`QG src/core/providers/ogr/qgsogrprovider.cpp` l. 4686-4696) invalide le pool de connexions, **ferme puis rouvre le fichier au même chemin** (`open( OpenModeSameAsCurrent )`, en lecture seule si la couche l'était, l. 4435-4436) |
+| `couche.triggerRepaint()` | **oui** : slot public (`qgsmaplayer.h` l. 1934) | redessine la couche |
+| `couche.dataProvider().reloadData()` | `dataProvider()` est `Q_INVOKABLE` (l. 313), `reloadData()` est une méthode virtuelle ordinaire (`QG src/core/providers/qgsdataprovider.h` l. 461) : **non** | — |
+| `setDataSource(...)` | **non** : méthode publique ordinaire (`qgsmaplayer.h` l. 1485, hors `slots`) | c'est la seule qui change le chemin ou rend valide une couche invalide (`setValid`, `qgsvectorlayer.cpp` l. 2309-2319) |
+| `QgsProject::reloadAllLayers()` | **non** (`QG src/core/project/qgsproject.h` l. 1565, section `public:` l. 138) | — |
+
+Conséquences : (a) le plugin **ne peut pas changer le chemin** d'une couche du projet : le chemin doit être fixe ;
+(b) `reload()` relit le fichier présent à ce chemin, mais **ne rend pas valide une couche chargée invalide** (`reload` ne passe
+pas par `setValid`) : le fichier doit exister **à l'ouverture du projet**. L'emprise mémorisée par la couche n'est pas
+recalculée par `reload` (rendu correct ; « zoomer sur la couche » peut être faux jusqu'à la réouverture : à vérifier).
+
+### 14.2 Remplacer un GeoPackage tenu ouvert, en gardant le tout ou rien
+
+- Écrire **sur** le fichier ouvert (`saveVectorLayerAs` vers le chemin fixe, `CreateOrOverwriteFile`, `QF qflayerutils.cpp`
+  l. 710) écrase sans contrôle préalable : un échec au milieu (réseau déjà fini, mais écriture refusée, contrôle raté) laisse
+  une couche vide ou partielle **et** perd l'ancien cache. Contraire à l'arbitrage n° 7. **Écarté.**
+- **Bascule par renommage** : `platformUtilities.renameFile(ancien, nouveau, overwrite)` est `Q_INVOKABLE`
+  (`QF src/core/platforms/qfplatformutilities.h` l. 132 ; `.cpp` l. 214-250 : crée le dossier, efface la cible si
+  `overwrite`, puis `QFile::rename`, repli copie + effacement), non surchargé sous Android ; il ne contrôle pas le dossier du
+  projet (garde à faire dans la logique, comme `peutToucherCache`). Sous Android (Linux), renommer ou effacer un fichier ouvert
+  est permis : la couche garde l'ancien fichier jusqu'à `reload()`.
+- **Journal SQLite** : QGIS ouvre d'abord un GeoPackage en écriture **sans WAL** (`DO_NOT_ENABLE_WAL`, `qgsogrprovider.cpp`
+  l. 4470-4476 ; `QG qgsogrproviderutils.cpp` l. 1026-1052), puis le rouvre en lecture seule (l. 4600-4640) ; à la fermeture
+  il remet `journal_mode = delete` (`qgsogrproviderutils.cpp` l. 1186-1230). Une couche du cache en lecture seule ne devrait
+  donc pas laisser de `-wal`/`-shm` ; s'il en reste un à côté du chemin fixe, un nouveau fichier au même nom risquerait de
+  rejouer un journal étranger : **refuser la bascule si `<couche>.gpkg-wal` existe** (contrôle `FileUtils.fileExists`).
+
+**Forme proposée du tout ou rien** (chemin fixe `vision-imports/_cache-onf/actuel/<couche>.gpkg`) :
+
+1. Comme aujourd'hui : trois réponses jugées, puis une **génération** `_cache-onf/<horodatage>/` écrite et contrôlée (GML,
+   `.gfs`, GeoPackage relu). Rien de changé : c'est la partie prouvée sur le Samsung.
+2. Si les trois passent, et aucun `-wal` à côté des fichiers actuels : pour chaque couche, renommer `actuel/<couche>.gpkg` en
+   `<ancienne génération>/<couche>.gpkg` (sauvegarde), puis `<nouvelle génération>/<couche>.gpkg` en `actuel/<couche>.gpkg`.
+3. Un renommage refusé : remettre les sauvegardes déjà déplacées (renommages inverses), message « Enregistrement du cache ONF
+   impossible… » (texte validé), l'ancien cache reste.
+4. `reload()` puis `triggerRepaint()` sur les trois couches du groupe ; registre mis à jour (date, nombres, emprise) ;
+   sauvegardes effacées.
+
+Fenêtre de risque résiduelle : `renameFile` efface la cible puis renomme (l. 233-244) ; un arrêt de QField entre les deux
+laisse un chemin fixe sans fichier : page « Unable to load some layers » à l'ouverture suivante (§ 14.3), et le plugin recrée
+une couche vide. Pas de renommage atomique exposé.
+
+### 14.3 Ouverture du projet : les GeoPackage doivent exister
+
+Un chemin absent à l'ouverture fait une couche invalide, et QField affiche alors en plein écran « Unable to load some layers …
+please review those and reconfigure the QGIS project » (`QF src/app/qfbadlayerhandler.cpp` l. 52-64 ; `src/app/qml/QfBadLayerItem.qml`
+l. 22, 44, 65-70). Inacceptable pour l'agent. Il faut donc que les trois fichiers existent avant la première ouverture :
+
+- **Première installation** (`projet-vision.zip`) : y ajouter `vision-imports/_cache-onf/actuel/<couche>.gpkg` vides (schéma :
+  champs du service, MultiPolygon / Point, EPSG:2154). Sûr : QField importe ce zip dans un dossier neuf (mission 028).
+- **Mise à jour** (`projet-vision-mise-a-jour.zip`) : **ne doit jamais** les contenir (elle écraserait un cache rempli) ; le
+  garde-fou existe déjà (`outils/zips-projet-modele.mjs`, `verifierMiseAJour` : `vision.qgz` seul) et doit le rester.
+- **Appareils déjà en service** (projet installé avant l'étape 3) : ils n'ont pas ces fichiers. Le plugin les crée s'ils
+  manquent, à **toute** ouverture de projet Vision (y compris avec l'ancien `vision.qgz`), par la voie prouvée : un GML sans objet
+  + `.gfs` (§ 11 ; lecture d'une réponse vide essayée avec GDAL 3.8.4) réécrit par `saveVectorLayerAs`. Ordre à donner à
+  Pascal : **mettre à jour le plugin, ouvrir le projet une fois, puis seulement copier le nouveau `vision.qgz`**. Dans l'autre
+  ordre : la page « Unable to load some layers » **une fois**, puis le plugin crée les fichiers ; les couches restent invalides
+  jusqu'à la réouverture (`reload` ne les répare pas, § 14.1).
+- Autre voie, écartée : tables du cache dans `saisie.gpkg` (toujours présent) : les appareils en service n'ont pas ces tables
+  (même page), et le cache se mêlerait aux points saisis.
+
+### 14.4 Registre, rechargement, retrait, coexistence
+
+- **Projet modèle** : groupe « ONF Cache » (proposé au-dessus de « ONF WFS », fiche) ; trois couches `ogr`,
+  `./vision-imports/_cache-onf/actuel/<couche>.gpkg|layername=<couche>`, noms validés « … (© ONF) », styles `STYLES_ONF`
+  (le style du projet prime : le `.qml` voisin n'est plus nécessaire), `<rights>© ONF</rights>` possible (les métadonnées
+  viennent alors du projet, § 12 résolu pour le cache), lecture seule, et **marques** `vision/cache=onf`, `vision/couche=<couche>`
+  dans `<customproperties>` (lues par QGIS, `QG qgsmaplayer.cpp` l. 955, 2485) pour que le plugin les trouve
+  (`coucheDuCache`).
+- **Plugin, deux modes** : si le projet porte ces trois couches marquées : mode « groupe » (bascule par renommage +
+  `reload`, **jamais** `addMapLayer` ni `removeMapLayer` sur elles ; `retirerCacheDeLaCarte` actuel les retirerait du projet :
+  à séparer). Sinon (ancien `vision.qgz`) : mode actuel, en tête de liste. `coucheDuProjet` les reconnaît déjà (marque
+  `vision/cache`).
+- **Registre** : les entrées gardent date, nombres et emprise (ligne du panneau) ; `chemin` devient `actuel/<couche>.gpkg`
+  (`entreeDuCacheSaine` à étendre ; une version plus ancienne du plugin les retirerait comme douteuses, sans effacer).
+- **Réouverture** : en mode groupe, rien à charger (QGIS lit les couches du projet) ; le plugin vérifie seulement leur validité
+  (sinon « Cache ONF illisible… », texte validé) et crée les fichiers manquants pour la fois suivante.
+- **Migration** d'un cache existant (génération `<horodatage>/` en tête de liste) : à la première ouverture en mode groupe, si
+  `actuel/` ne contient que les fichiers vides et que le registre désigne une génération lisible, renommer ses trois
+  GeoPackage vers `actuel/`, `reload()`, mettre à jour le registre ; hors réseau. Sinon le cache revient vide et l'agent le
+  refait avec réseau.
+- **Retrait** : pas de retrait du cache aujourd'hui (aucun texte) ; inchangé.
+
+### 14.5 Voies classées
+
+| Rang | Voie | Prouvé à la lecture | À prouver sur le Samsung | Prix |
+|---|---|---|---|---|
+| **1 (recommandée)** | **C4 + bascule** : couches du projet à chemin fixe, génération contrôlée comme aujourd'hui, bascule par `renameFile`, `reload()` | `reload` exposé et réouvrant le fichier ; `renameFile` exposé ; pas de WAL en lecture seule | `reload` après renommage relit bien le nouveau fichier ; renommer un GeoPackage ouvert sous Android sans erreur ni plantage du rendu ; GeoPackage vide valide à l'ouverture ; pas de `-wal` | un fichier de plus dans le zip de première installation ; plugin à deux modes ; consigne d'ordre de mise à jour |
+| 2 | C4 + écriture directe sur le chemin fixe, puis `reload()` | `saveVectorLayerAs` écrase | idem, plus l'écrasement d'un fichier ouvert | **perd le tout ou rien** (ancien cache perdu si l'écriture échoue) |
+| 3 | Statu quo : cache en tête de liste (prouvé, validé « Tout fonctionne ») | tout | — | pas de groupe |
+
+Il n'existe pas de voie qui range des couches créées par le plugin dans un groupe (`layerTreeRoot` non exposé, § 4).
+
+**Sonde courte proposée (avant tout prototype)** : un bouton d'essai, dans un projet d'essai qui déclare une couche
+`essai/actuel/x.gpkg` : (1) ouverture avec le fichier présent : couche valide, nombre d'objets ; (2) écrire une génération
+`essai/g2/x.gpkg` avec d'autres objets, `renameFile` vers `actuel/x.gpkg`, `reload()`, `triggerRepaint()` : nombre d'objets
+relu par la couche du projet, rendu à l'écran, aucun `-wal` ; (3) rouvrir le projet hors réseau ; (4) fichier effacé puis
+réouverture : page « Unable to load some layers » attendue (à constater, pour la consigne). Compte rendu écrit dans le dossier
+du projet, comme la sonde de l'étape 1 bis.
+
+**Questions à Pascal** : (1) voie 1 acceptée, avec la consigne d'ordre « plugin d'abord, puis `vision.qgz` » pour les
+appareils déjà en service, et des GeoPackage vides dans `projet-vision.zip` ? (2) le groupe « ONF Cache » au-dessus de
+« ONF WFS » : avec réseau, les objets du cache et du WFS se superposent (mêmes styles) ; faut-il décocher par défaut l'un des
+deux groupes ? (le plugin ne peut pas cocher un groupe) ; (3) faut-il d'abord la sonde courte sur le Samsung (recommandé)
+avant le prototype ?
+
+Remarque hors périmètre : la page « Unable to load some layers » attendue à l'ouverture **sans réseau** à cause des couches
+WFS (relecture d'ensemble, journal) n'est pas traitée ici ; le groupe « ONF Cache » à couches GeoPackage n'y ajoute rien
+tant que ses fichiers existent.
