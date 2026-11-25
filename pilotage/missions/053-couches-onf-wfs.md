@@ -137,6 +137,9 @@ relu sans réseau. Le prototype est le **cache de zone dans le plugin**, publié
 | Dans le panneau | « Cache ONF du 25/11/2026 : 4 forêts, 53 parcelles, 1 point de rencontre. » |
 | Noms des couches | « Forêts publiques (ONF) », « Parcelles forestières (ONF) », « Points de rencontre des secours (ONF) » |
 
+Attribution des trois couches : « © ONF » (validée par Pascal le 25 novembre 2026 ; accord de l'ONF rapporté par
+Pascal, trace écrite à verser).
+
 « Trop d'objets » nomme la couche en cause (parcelles, forêts ou points de rencontre). Tout autre texte est soumis à
 Pascal avant d'être écrit.
 
