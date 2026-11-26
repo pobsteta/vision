@@ -50,3 +50,12 @@ réouverture du projet sans plantage ni page d'erreur ; nouveau cache possible e
 - **Rappel de la 055** : après le vidage, le panneau dit « Cache ONF absent… » (déjà prévu par le registre).
 - **Version** : 0.10.0. **Preuve avant code**, puis **textes proposés à Pascal** (bouton, confirmation, réussite, échec) avant
   toute ligne de plugin.
+
+## Textes validés par Pascal (26 novembre 2026)
+
+- Bouton (visible seulement quand un cache ONF est inscrit au registre) : « Vider le cache ONF »
+- Confirmation, dans le panneau, sans fenêtre bloquante, refermée seule au bout de 15 secondes : « Vider le cache ONF ? Il faudra du réseau pour le refaire. », avec deux boutons séparés : « Non, garder » (en haut) et « Oui, vider » (en dessous)
+- Réussite : « Cache ONF vidé. » ; avec des fichiers restés (mode ancien) : « Cache ONF vidé. Fichiers restés sur l'appareil : … »
+- Échec : « Cache ONF non vidé : rien n'est changé, l'ancien est gardé. »
+- Pendant le vidage : aucun texte, bouton grisé.
+- Choix de l'orchestrateur, sans texte neuf, signalés à Pascal : retour arrière incomplet → même texte d'échec, détail dans `dernier-echec.txt` ; mode ancien avec un registre qui pointe `actuel/` → refus avec le texte d'échec, rien d'effacé.
