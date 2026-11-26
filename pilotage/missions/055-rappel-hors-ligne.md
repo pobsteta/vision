@@ -1,7 +1,7 @@
 # Mission 055 — Rappel « préparer le hors ligne »
 
 > Fiche rédigée par Claude (orchestrateur) le 26 novembre 2026, sur décision de Pascal du même jour (spec § 11 n° 6 :
-> « oui, texte à valider »). **Statut : proposée, à valider par Pascal (porte n° 2).** Une mission = une phrase = une
+> « oui, texte à valider »). **Statut : validée par Pascal le 26 novembre 2026 (porte n° 2) ; textes validés le même jour.** Une mission = une phrase = une
 > branche = une PR.
 
 ## Mission
@@ -10,7 +10,8 @@
 zone pour garder les fonds IGN en mémoire, faire le cache ONF de cette zone), par un texte court que Pascal valide avant tout
 code, pour qu'il ne découvre pas en forêt une carte vide.
 
-**Redite par l'agent :** _à compléter par l'agent avant d'agir — s'il n'y arrive pas, il s'arrête._
+**Redite par l'agent :** afficher dans le panneau Vision, sans rien bloquer, une ligne permanente de rappel et, selon la date du cache ONF au registre,
+une ligne « absent » ou « ancien (plus de 7 jours) », pour que l'agent ne découvre pas en forêt une carte vide.
 
 ## Deux temps
 
@@ -21,6 +22,18 @@ code, pour qu'il ne découvre pas en forêt une carte vide.
    prouvé »). Rien ne s'affiche sans l'accord de Pascal sur le texte et le moment.
 2. **Réalisation**, après accord : tests rouges d'abord, aucun test affaibli ; texte rangé avec les textes validés et relu dans
    la fiche par un test.
+
+## Textes validés
+
+**Textes validés par Pascal (26 novembre 2026, fin de `pilotage/journal.md`)**, mot pour mot ; JJ/MM = jour et mois de la date
+du cache (registre). Moment : ligne **permanente** du panneau sous le bouton du cache, plus la ligne conditionnelle ; pas de
+détection du réseau (`isReachable` écarté) ; jamais bloquant (texte dans le panneau, aucune fenêtre). Seuil : plus de 7 jours.
+
+| Moment | Texte |
+|---|---|
+| Permanent | « Avant le terrain, avec du réseau : parcourez la zone du jour, puis mettez l'ONF en cache. » |
+| Cache absent | « Cache ONF absent : mettez-le en cache avant de partir. » |
+| Cache ancien | « Cache ONF ancien (du JJ/MM) : renouvelez-le avant de partir. » |
 
 ## L'Homme
 
@@ -48,3 +61,9 @@ code, pour qu'il ne découvre pas en forêt une carte vide.
 ## Comment saura-t-on que ça marche ?
 
 L'agent qui part en forêt après avoir vu le rappel trouve, hors réseau, les fonds et le cache ONF de sa zone.
+
+## Limite connue (relecture du 26 novembre 2026)
+
+Le rappel est calculé à l'ouverture du panneau (une fois par session de QField) et quand le registre change : si QField reste
+ouvert plusieurs jours, la ligne « ancien » n'apparaît qu'à la réouverture du projet. Un cache incomplet (une ou deux couches
+sur trois) est dit « absent ».

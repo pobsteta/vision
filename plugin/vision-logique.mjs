@@ -12,7 +12,7 @@
 // Aucune fonction ne touche QField : tout passe par les objets reçus (réglages, chargerCouche,
 // existe, platformUtilities), que Vision.qml branche sur l'API de QField (plugin/PLAN.md § 5).
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.8.0';
 
 // Mission 038 : comptage des entités par itérateur. Dans QGIS 3a92eb3, `featureCount()` (qgsvectorlayer.h l. 1701,
 // `long long featureCount() const final;`) n'est ni Q_PROPERTY ni Q_INVOKABLE : QML ne peut pas l'appeler. QField v4.3.7
@@ -1733,6 +1733,34 @@ export function cacheLignePanneau(liste) {
   const compte = {};
   for (let i = 0; i < e.length; i++) compte[e[i].couche] = e[i].objets;
   return `Cache ONF du ${cacheDateAffichee(e[0].date)} : ${decompte(compte)}.`;
+}
+
+// Mission 055 : rappel « préparer le hors ligne » du panneau. Textes validés par Pascal le 26 novembre 2026 (fiche 055,
+// « Textes validés »), mot pour mot. Aucune détection du réseau ; jamais bloquant (texte dans le panneau seulement).
+export const TEXTES_RAPPEL = {
+  permanent: "Avant le terrain, avec du réseau : parcourez la zone du jour, puis mettez l'ONF en cache.",
+  absent: 'Cache ONF absent : mettez-le en cache avant de partir.',
+};
+export const RAPPEL_JOURS_MAX = 7;
+
+// Vrai si le cache date de plus de 7 jours (7 jours pile : non). Date illisible, future ou cache du jour : faux.
+export function cacheAncien(date, maintenant) {
+  const d = date instanceof Date ? date : (typeof date === 'string' ? new Date(date) : new Date(NaN));
+  const m = maintenant instanceof Date ? maintenant : (typeof maintenant === 'string' ? new Date(maintenant) : new Date(NaN));
+  if (!isFinite(d.getTime()) || !isFinite(m.getTime())) return false;
+  return m.getTime() - d.getTime() > RAPPEL_JOURS_MAX * 86400000;
+}
+
+// « Cache ONF ancien (du JJ/MM) : renouvelez-le avant de partir. »
+export function texteRappelAncien(date) {
+  return 'Cache ONF ancien (du ' + cacheDateAffichee(date).slice(0, 5) + ') : renouvelez-le avant de partir.';
+}
+
+// Ligne conditionnelle : cache ONF absent (ou incomplet), ou ancien ; '' sinon.
+export function rappelCacheLigne(liste, maintenant) {
+  const e = entreesDuCache(liste);
+  if (e.length !== CACHE_ONF.couches.length) return TEXTES_RAPPEL.absent;
+  return cacheAncien(e[0].date, maintenant) ? texteRappelAncien(e[0].date) : '';
 }
 
 function empriseFinie(e) {

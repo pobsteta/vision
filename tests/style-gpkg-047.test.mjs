@@ -337,8 +337,8 @@ test('vision-logique.mjs : la requête ne lit que styleQML de layer_styles (pas 
   assert.doesNotMatch(src, /\?\?/);
 });
 
-test('version 0.7.0 (constante, metadata.txt) et préversion : branche de la mission 050 dans release-plugin.yml', () => {
-  assert.equal(L.VERSION, '0.7.0');
-  assert.match(lire('plugin/metadata.txt'), /^version=0\.7\.0$/m);
+test('version 0.8.0 (constante, metadata.txt) et préversion : branche de la mission 050 dans release-plugin.yml', () => {
+  assert.equal(L.VERSION, '0.8.0');
+  assert.match(lire('plugin/metadata.txt'), /^version=0\.8\.0$/m);
   assert.match(lire('.github/workflows/release-plugin.yml'), /'mission\/050-vision'/);
 });

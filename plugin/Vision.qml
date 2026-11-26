@@ -563,6 +563,13 @@ Item {
     return id ? Logique.cacheLignePanneau(Logique.lireRegistre(reglages, id)) : "";
   }
 
+  // Mission 055 : ligne conditionnelle du rappel (cache ONF absent ou ancien), '' sinon. Aucune lecture du réseau.
+  readonly property string texteRappel: Logique.TEXTES_RAPPEL.permanent
+  function rappelLigne() {
+    const id = visionId();
+    return Logique.rappelCacheLigne(id ? Logique.lireRegistre(reglages, id) : [], new Date());
+  }
+
   // Emprise visible en EPSG:2154 : les quatre coins de l'écran (carte tournée), par mapSettings.screenToCoordinate
   // (qgsquickmapsettings.h l. 236, Q_INVOKABLE, coordonnées de l'élément de carte), reprojetés si la carte n'est pas en
   // EPSG:2154 (GeometryUtils.reprojectPoint). Repli : visibleExtent (l. 72). null si illisible.
