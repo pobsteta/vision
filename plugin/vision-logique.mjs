@@ -1281,7 +1281,23 @@ function importerZipSuivi(ctx, suivi) {
       const autresEntrees = lireRegistre(ctx.reglages, ctx.visionId).filter((x) => !memeCouche(x, nomZip, c.couche));
       const bilanAnnexes = effacerFichiersDeCouche(ctx, nomZip, c.couche, autresEntrees, ANNEXES_COUCHE);
       noterEffacement(bilanEfface, bilanAnnexes);
-      if (bilanAnnexes.restes.length > 0) { suivi.liberer(r.couche); continue; }
+      if (bilanAnnexes.restes.length > 0) {
+        suivi.liberer(r.couche);
+        // Décision de Pascal (26 novembre 2026) : la couche gardée a été retirée de la carte plus haut ; elle y revient depuis son
+        // ANCIENNE copie (fichier et registre inchangés), en lecture seule. Ouverture ratée : rien d'ajouté, rien d'inventé.
+        const ancienne = anciennes.find((x) => x && typeof x === 'object' && memeCouche(x, nomZip, c.couche) && typeof x.chemin === 'string');
+        const rendu = dossierCopies(ctx.dossierProjet) + '/' + ancienne.chemin;
+        const o = chargerSansPlanter(ctx.ouvrirCouche, rendu + '|layername=' + c.couche, c.couche, undefined, suivi.liberer);
+        suivi.suivre(o.couche);
+        if (o.couche) {
+          try {
+            o.couche.readOnly = true;
+            suivi.garder(o.couche);
+            ctx.ajouterALaCarte(o.couche, c.couche, rendu, nomZip);
+          } catch (e) { /* ajout impossible : la couche reste sur le disque et au registre, revient à la réouverture */ }
+        }
+        continue;
+      }
     }
     const cp = copierEtStyler(ctx, r.couche, c, nomZip, noms, suivi);
     // La couche ouverte dans le zip n'est jamais celle de la carte (la copie GeoPackage l'est) : libérée sans attendre.
