@@ -690,6 +690,8 @@ tant que ses fichiers existent.
 
 ### 14 bis. Sonde C4 (étape 3, temps 2) et protocole d'essai sur le Samsung
 
+> **Sonde retirée le 26 novembre 2026 (temps 3)** : plus aucun code, bouton ni texte provisoire de la sonde dans le plugin (garde : `tests/sonde-c4-053.test.mjs`). Ce paragraphe garde l'historique de la preuve (verdict « PROUVÉE », comptes rendus dans `docs/referentiels/brut/onf/sonde-c4-2026-11-25/`).
+
 Arbitrages de Pascal sur l'étape 3 (fiche 053) : voie 1, groupes « ONF Cache » et « ONF WFS » cochés par défaut, **sonde
 courte d'abord**. La sonde C4 est un **outil d'essai** du plugin 0.7.0 (préversion `plugin-essai`), textes provisoires, à retirer
 avant toute fusion vers `main` (garde : `tests/sonde-c4-053.test.mjs`). Elle ne touche ni au registre, ni au cache ONF, ni à
@@ -730,3 +732,77 @@ Ce qu'elle fait :
 version de QField. Si le verdict est « PROUVÉE », le prototype du groupe « ONF Cache » (temps 3) peut suivre la voie 1 ; sinon,
 noter ce que la couche relue a affiché (2 objets : `reload()` n'a pas relu le nouveau fichier ; couche invalide : le renommage
 d'un fichier ouvert pose problème sous Android).
+
+## 15. Étape 3, temps 3 : prototype du groupe « ONF Cache » (voie C4, voie 1 du § 14)
+
+Rédigé par le `dev` le 26 novembre 2026, après la sonde C4 (§ 14 bis, verdict « PROUVÉE » sur le Samsung, QField 4.3.8). Arbitrages de
+Pascal appliqués tels quels (fiche 053, étape 3). Plugin toujours en **0.7.0** (préversion `plugin-essai`).
+
+**Projet modèle** (`outils/projet-modele.mjs`, `vision.qgz` régénéré) : le groupe « ONF » devient **« ONF WFS »** ; le groupe **« ONF Cache »**
+est placé au-dessus ; les deux sont cochés et dépliés. Les trois couches du cache sont des couches `ogr` à chemin fixe
+`./vision-imports/_cache-onf/actuel/<couche>.gpkg|layername=<couche>` (une seule définition : `cacheSourceProjet`, plugin), aux noms validés
+« … (© ONF) » (les mêmes que les couches WFS), au style adapté du plugin (`STYLES_ONF`), lecture seule, `<rights>© ONF</rights>`, marques
+`vision/cache=onf` et `vision/couche=<couche>` dans la section `customproperties` du style, identifiant `ONF_Cache_<couche>_<empreinte>`.
+Seuils : parcelles et points en deçà du 1:50 000 (posé par le style), forêts du cache toujours visibles (les forêts WFS le sont en deçà du
+1:250 000, seuil du projet).
+
+**Zips** (`outils/zips-projet-modele.mjs`) : `projet-vision.zip` (première installation) contient en plus
+`vision-imports/_cache-onf/actuel/{FOR_PUBL_FR,PARC_PUBL_FR,PRS_FR}.gpkg`, **vides** (table = couche, champs réels du service en `TEXT`,
+`MULTIPOLYGON` ou `POINT`, EPSG:2154, sans index spatial comme `saisie.gpkg`), fabriqués à la demande (aucun binaire versé au dépôt) ;
+`projet-vision-mise-a-jour.zip` reste `vision.qgz` seul (le garde-fou `verifierMiseAJour` refuse tout autre membre).
+
+**Plugin** (deux modes, `plugin/vision-logique.mjs`, `plugin/Vision.qml`) :
+
+- **Mode groupe** (le projet porte les trois couches marquées, qui ne sont pas des couches du plugin) : le bouton garde tout ce qu'il
+  faisait jusqu'à la génération contrôlée (`<horodatage>/`, GML, `.gfs`, GeoPackage relu), sans écrire de `.qml` ; puis `basculerGeneration` :
+  refus avant toute écriture si une couche du projet est invalide ou si un `-wal` existe à côté d'un GeoPackage actuel ; refus si un `-wal` existe
+  à côté du GeoPackage de la génération ; pour chaque couche, l'actuel est mis de côté (`<horodatage>/<couche>.avant.gpkg`) puis le nouveau y
+  prend sa place (`renameFile`, jamais vers un fichier existant) ; `reload()` + `triggerRepaint()` des trois couches ; **contrôle de ce que la
+  couche affiche** (valide, nombre d'objets attendu) ; au moindre écart : renommages inverses dans l'ordre inverse, nouveau `reload()`, texte
+  validé « Enregistrement du cache ONF impossible… » ; retour arrière incomplet : rien n'est effacé (la sauvegarde y est peut-être seule) et la
+  raison l'écrit dans `dernier-echec.txt`. Réussite : registre sur `actuel/<couche>.gpkg` (date, nombres, emprise), sauvegardes et fichiers de
+  travail effacés. Jamais `addMapLayer`, `removeMapLayer` ni `deleteLater` sur ces couches.
+- **Mode ancien** (ancien `vision.qgz`, ou une couche manquante) : comportement d'avant, en tête de liste ; les couches ajoutées par le plugin
+  portent en plus `vision/origine=plugin`, et `retirerCacheDeLaCarte` ne retire plus que celles-là.
+- **Ouverture d'un projet Vision, dans les deux modes** : les GeoPackage vides absents de `actuel/` sont créés (GML sans objet + `.gfs` +
+  `saveVectorLayerAs`, jamais sur un fichier existant, jamais rouverts par une couche de travail : le jeu de données GDAL serait partagé avec la
+  couche du projet). En mode groupe seulement : **migration** d'un cache en génération (trois entrées du registre de la même génération, fichiers
+  présents, couches du projet valides) vers `actuel/` par la même bascule, hors réseau ; en cas d'échec, le cache enregistré n'est pas affiché
+  et le texte validé « Cache ONF illisible : il n'est pas affiché ; remettez-le en cache avec réseau. » le dit.
+- **Textes** : aucun texte neuf (tous dans `TEXTES_CACHE_ONF`). Raisons détaillées pour le journal de QField (`console.log`, notes de
+  l'ouverture) et pour `dernier-echec.txt`.
+
+**Consigne d'ordre de mise à jour (appareils en service)** : **mettre à jour le plugin, ouvrir le projet une fois (le plugin crée les trois
+GeoPackage vides, même avec l'ancien `vision.qgz`), puis seulement copier le nouveau `vision.qgz`**. Dans l'autre ordre : la page « Impossible de
+charger certaines couches » une fois (essai C4, geste 6), et les trois couches du groupe restent invalides jusqu'à la réouverture (`reload()` ne
+rend pas valide une couche chargée invalide, § 14.1). Avec cette consigne, la première ouverture du nouveau `vision.qgz` migre l'ancien cache.
+À écrire dans le README et la spec (archiviste) ; non fait ici.
+
+**Limites connues** (en plus de celles du § 11) : un dossier de génération vide reste à chaque cache ; une couche du projet invalide à
+l'ouverture (fichier absent créé à l'instant, fichier illisible) est dite (« Cache ONF illisible… ») mais le bouton refuse tant que le projet n'a
+pas été rouvert (texte « Enregistrement… impossible », aucun texte plus précis n'est validé) ; chaque bascule laisse ouverts, jusqu'à la
+fermeture de QField, les trois fichiers de travail de la génération (les couches de travail ne sont jamais libérées, § 10) ; les deux groupes
+cochés se superposent avec réseau (arbitrage de Pascal) ; la même paire de noms de couches existe dans les deux groupes.
+
+**Lu dans le code, non essayé sur l'appareil** (à relever sur le Samsung) :
+
+1. `customProperty("vision/cache" …)` lu par le plugin sur des couches **chargées par le projet** (la sonde posait les marques par le plugin) ;
+   repli prévu par l'identifiant `ONF_Cache_<couche>_…`.
+2. La bascule des **vrais** GeoPackage du cache (écrits par `saveVectorLayerAs` avec index spatial, ouverts une fois par une couche de travail
+   puis renommés) sous les couches du projet : la sonde basculait des GeoPackage jamais ouverts.
+3. Le GeoPackage vide créé par le plugin pour un **`MULTIPOLYGON`** (la sonde n'a créé qu'un `Point`) ; la lecture du GeoPackage vide livré dans
+   `projet-vision.zip` par QField (même forme que `saisie.gpkg`, mais jamais ouvert ici : GDAL absent de la session).
+4. L'import de `projet-vision.zip` par QField **avec sous-dossiers** (`vision-imports/_cache-onf/actuel/`).
+5. La migration d'un cache existant ; l'absence de page « Impossible de charger certaines couches » à l'ouverture du nouveau projet.
+
+**Protocole court (Samsung, plugin `plugin-essai` 0.7.0 de cette branche ; forêt de JFC autour de x 895 717, y 6 679 283 en EPSG:2154)** :
+
+| N° | Geste | Attendu | Si autre chose |
+|---|---|---|---|
+| 1 | Appareil neuf ou dossier du projet effacé : importer `projet-vision.zip` (flashcode d'essai), ouvrir le projet | aucune page d'erreur ; groupes « ONF Cache » (3 couches) et « ONF WFS » (3 couches) cochés ; rien d'affiché pour le cache ; dans le dossier du projet : `vision-imports/_cache-onf/actuel/` avec 3 `.gpkg` | capture ; sous-dossiers absents : le dire (point 4) |
+| 2 | Avec réseau, carte sur la forêt, bouton « Mettre en cache les couches ONF de cette zone » | message de réussite ; objets du cache **dans le groupe « ONF Cache »** (pas en tête de liste), superposés aux WFS ; ligne « Cache ONF du … » ; `actuel/` : 3 `.gpkg`, **ni `-wal` ni `-shm`**, pas de `.avant.gpkg` | message + `dernier-echec.txt` |
+| 3 | Mode avion, fermer puis rouvrir le projet | les trois couches reviennent depuis `actuel/`, WFS vides, même ligne du panneau, aucune page d'erreur | capture |
+| 4 | Avec réseau, une autre forêt proche, bouton | nouveau message ; l'ancienne zone disparaît sans fermer le projet (reload) ; durée relevée | capture ; ancienne zone encore affichée : `reload()` sans effet sur un vrai cache |
+| 5 | Mode avion, bouton | « Pas de réseau… », l'ancien cache reste | capture |
+| 6 | **Appareil en service** (projet d'une version précédente, avec un cache en génération `<horodatage>/`) : mettre à jour le plugin, ouvrir l'ancien projet (3 `.gpkg` vides créés dans `actuel/`), copier le nouveau `vision.qgz`, rouvrir | aucune page d'erreur ; l'ancien cache est dans « ONF Cache » (migré) ; ligne du panneau inchangée | capture ; page d'erreur : noter l'ordre suivi |
+

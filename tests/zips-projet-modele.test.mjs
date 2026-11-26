@@ -8,7 +8,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
 import { ecrireZip } from './recette/essai/zip-ecrire.mjs';
-import { fabriquerZips, nomsDuZip, verifierMiseAJour, verifierPremiereInstallation, ZIP_MISE_A_JOUR, ZIP_PREMIERE_INSTALLATION } from '../outils/zips-projet-modele.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { spawnSync } from 'node:child_process';
+import { fabriquerZips, nomsDuZip, verifierMiseAJour, verifierPremiereInstallation, ZIP_MISE_A_JOUR, ZIP_PREMIERE_INSTALLATION, CHEMINS_CACHE_VIDES } from '../outils/zips-projet-modele.mjs';
+import { CACHE_ONF } from '../plugin/vision-logique.mjs';
+
+const CACHE_VIDES = CACHE_ONF.couches.map((c) => `vision-imports/_cache-onf/actuel/${c.couche}.gpkg`);
+const gdal = spawnSync('ogrinfo', ['--version']).status === 0;
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
 const tmp = mkdtempSync(join(tmpdir(), 'vision-zips-021-'));
@@ -32,9 +38,9 @@ test('le zip de mise à jour contient vision.qgz seul, sans saisie.gpkg', () => 
   assert.deepEqual(nomsDuZip(buf), ['vision.qgz']);
   assert.ok(contenu(buf, 'vision.qgz').equals(contenu(readFileSync(r.premiereInstallation), 'vision.qgz')));
 });
-test('le zip de première installation contient vision.qgz et saisie.gpkg (vide, identique à celui du dépôt)', () => {
+test('le zip de première installation contient vision.qgz, saisie.gpkg (vide, identique à celui du dépôt) et les trois GeoPackage vides du cache ONF', () => {
   const r = fabriquerZips(join(tmp, 'b'), RACINE), buf = readFileSync(r.premiereInstallation);
-  assert.deepEqual(nomsDuZip(buf).sort(), ['saisie.gpkg', 'vision.qgz']);
+  assert.deepEqual(nomsDuZip(buf).sort(), ['saisie.gpkg', ...CACHE_VIDES, 'vision.qgz'].sort());
   assert.ok(contenu(buf, 'saisie.gpkg').equals(readFileSync(join(RACINE, 'saisie.gpkg'))));
   assert.ok(contenu(buf, 'vision.qgz').equals(readFileSync(join(RACINE, 'vision.qgz'))));
 });
@@ -60,11 +66,68 @@ test('garde-fou : un zip de mise à jour avec autre chose que vision.qgz seul es
   assert.doesNotThrow(() => verifierMiseAJour(ecrireZip([e('vision.qgz')])));
 });
 test('garde-fou : la première installation sans saisie.gpkg ou avec un intrus est refusée', () => {
-  assert.throws(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz')])), /vision\.qgz et saisie\.gpkg/);
-  assert.throws(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz'), e('saisie.gpkg'), e('x')])), /vision\.qgz et saisie\.gpkg/);
-  assert.doesNotThrow(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz'), e('saisie.gpkg')])));
+  const complet = [e('vision.qgz'), e('saisie.gpkg'), ...CACHE_VIDES.map((n) => e(n))];
+  assert.throws(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz')])), /vision\.qgz, saisie\.gpkg/);
+  assert.throws(() => verifierPremiereInstallation(ecrireZip([e('vision.qgz'), e('saisie.gpkg')])), /vision\.qgz, saisie\.gpkg/, 'sans les GeoPackage du cache : refusée');
+  assert.throws(() => verifierPremiereInstallation(ecrireZip([...complet, e('x')])), /vision\.qgz, saisie\.gpkg/);
+  assert.throws(() => verifierPremiereInstallation(ecrireZip(complet.slice(0, -1))), /vision\.qgz, saisie\.gpkg/, 'un GeoPackage du cache manque');
+  assert.doesNotThrow(() => verifierPremiereInstallation(ecrireZip(complet)));
 });
 test('fabriquerZips échoue si une source manque', () => {
   const vide = join(tmp, 'vide'); writeFileSync(join(tmp, 'seul.qgz'), 'x');
   assert.throws(() => fabriquerZips(join(tmp, 'd'), vide));
+});
+
+test('mise à jour : jamais un GeoPackage du cache (il écraserait un cache rempli) ; refusé quel que soit le dossier', () => {
+  for (const nom of CACHE_VIDES) assert.throws(() => verifierMiseAJour(ecrireZip([e('vision.qgz'), e(nom)])), /seul/, nom);
+  const r = fabriquerZips(join(tmp, 'maj'), RACINE);
+  assert.deepEqual(nomsDuZip(readFileSync(r.miseAJour)), ['vision.qgz']);
+});
+
+test('chemins des GeoPackage vides : ceux de vision.qgz (chemin fixe), un par couche du cache', () => {
+  assert.deepEqual(CHEMINS_CACHE_VIDES, CACHE_VIDES);
+});
+
+// Lit les GeoPackage vides du zip de première installation avec node:sqlite (le schéma réel des champs du service, MultiPolygon / Point, EPSG:2154).
+function gpkgDuZip(chemin) {
+  const r = fabriquerZips(join(tmp, 'g'), RACINE);
+  const f = join(tmp, 'lu-' + chemin.replace(/\//g, '_'));
+  writeFileSync(f, contenu(readFileSync(r.premiereInstallation), chemin));
+  return f;
+}
+
+test('GeoPackage vides du cache : table = nom de la couche, 0 objet, EPSG:2154, MultiPolygon pour forêts et parcelles, Point pour les points', () => {
+  for (const c of CACHE_ONF.couches) {
+    const f = gpkgDuZip(`vision-imports/_cache-onf/actuel/${c.couche}.gpkg`);
+    const db = new DatabaseSync(f, { readOnly: true });
+    try {
+      assert.deepEqual(db.prepare('SELECT table_name, data_type, srs_id FROM gpkg_contents').all().map((x) => ({ ...x })), [{ table_name: c.couche, data_type: 'features', srs_id: 2154 }]);
+      assert.deepEqual(db.prepare('SELECT table_name, column_name, geometry_type_name, srs_id FROM gpkg_geometry_columns').all().map((x) => ({ ...x })),
+        [{ table_name: c.couche, column_name: 'geom', geometry_type_name: c.wkb === 1 ? 'POINT' : 'MULTIPOLYGON', srs_id: 2154 }]);
+      assert.equal(db.prepare(`SELECT count(*) AS n FROM "${c.couche}"`).get().n, 0);
+      const cols = db.prepare(`PRAGMA table_info("${c.couche}")`).all().map((x) => x.name);
+      assert.deepEqual(cols, ['fid', 'geom', ...c.champs], 'champs réels du service (DescribeFeatureType de la mesure n° 1), ni gml_id ni coordinates');
+      assert.ok(db.prepare('SELECT 1 AS x FROM gpkg_spatial_ref_sys WHERE srs_id = 2154').get(), 'EPSG:2154 déclaré');
+      assert.equal(db.prepare('PRAGMA application_id').get().application_id, 1196444487);
+      assert.equal(db.prepare('PRAGMA journal_mode').get().journal_mode, 'delete', 'jamais de WAL');
+    } finally { db.close(); }
+  }
+});
+
+test('GeoPackage vides (GDAL réel) : lisibles, 0 objet, bon type de géométrie, EPSG:2154', { skip: !gdal && 'GDAL absent' }, () => {
+  for (const c of CACHE_ONF.couches) {
+    const f = gpkgDuZip(`vision-imports/_cache-onf/actuel/${c.couche}.gpkg`);
+    const r = spawnSync('ogrinfo', ['-json', '-so', f, c.couche], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    const j = JSON.parse(r.stdout).layers[0];
+    assert.equal(j.featureCount, 0);
+    assert.equal(j.geometryFields[0].type, c.wkb === 1 ? 'Point' : 'MultiPolygon');
+    assert.match(JSON.stringify(j.geometryFields[0].coordinateSystem), /2154/);
+    assert.deepEqual(j.fields.map((x) => x.name), c.champs);
+  }
+});
+
+test('déterministe : deux fabrications donnent les mêmes GeoPackage vides', () => {
+  const a = fabriquerZips(join(tmp, 'v1'), RACINE), b = fabriquerZips(join(tmp, 'v2'), RACINE);
+  for (const nom of CACHE_VIDES) assert.ok(contenu(readFileSync(a.premiereInstallation), nom).equals(contenu(readFileSync(b.premiereInstallation), nom)), nom);
 });

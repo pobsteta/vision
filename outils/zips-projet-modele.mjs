@@ -3,18 +3,27 @@
 //   projet-vision-mise-a-jour.zip = vision.qgz seul : MISE À JOUR, par copie de vision.qgz à la main (câble USB)
 //                                 dans le dossier du projet (mission 028 : QField importe un zip dans un dossier
 //                                 neuf, sans les points saisis). Sans saisie.gpkg : ne peut rien écraser.
-//   projet-vision.zip             = vision.qgz + saisie.gpkg vide : PREMIÈRE INSTALLATION, une seule fois par
-//                                 appareil (un saisie.gpkg rempli recopié serait perdu).
+//   projet-vision.zip             = vision.qgz + saisie.gpkg vide + trois GeoPackage vides du cache ONF (mission 053, étape 3 :
+//                                 vision-imports/_cache-onf/actuel/<couche>.gpkg, les chemins fixes du groupe « ONF Cache » de
+//                                 vision.qgz, sans quoi QField affiche « Impossible de charger certaines couches ») : PREMIÈRE
+//                                 INSTALLATION, une seule fois par appareil (un saisie.gpkg ou un cache rempli recopié serait perdu).
+//                                 La mise à jour n'a JAMAIS ces fichiers : ils écraseraient un cache rempli (garde : verifierMiseAJour).
 // Déterministe (dates MS-DOS fixes, ordre fixe). Écrit pour Vision, sans dépendance.
 // Usage : node outils/zips-projet-modele.mjs <dossier-de-sortie> [dossier-des-sources (défaut : racine du dépôt)]
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ecrireZip } from '../tests/recette/essai/zip-ecrire.mjs';
+import { CACHE_ONF } from '../plugin/vision-logique.mjs';
+import { ecrireGpkgCacheVide } from './projet-modele.mjs';
 
 export const ZIP_MISE_A_JOUR = 'projet-vision-mise-a-jour.zip';
 export const ZIP_PREMIERE_INSTALLATION = 'projet-vision.zip';
 export const NOM_QGZ = 'vision.qgz', NOM_GPKG = 'saisie.gpkg';
+
+// Chemins, dans le zip de première installation, des GeoPackage vides du cache ONF (ceux de vision.qgz, relatifs au dossier du projet).
+export const CHEMINS_CACHE_VIDES = CACHE_ONF.couches.map((c) => `vision-imports/${CACHE_ONF.dossier}/${CACHE_ONF.actuel}/${c.couche}.gpkg`);
 
 const entree = (nom, donnees) => ({ nom: Buffer.from(nom, 'utf8'), donnees, stocke: false, utf8: true });
 
@@ -39,13 +48,26 @@ export function verifierMiseAJour(buf) {
 }
 export function verifierPremiereInstallation(buf) {
   const noms = nomsDuZip(buf).sort();
-  if (noms.length !== 2 || !noms.includes(NOM_QGZ) || !noms.includes(NOM_GPKG)) throw new Error(`${ZIP_PREMIERE_INSTALLATION} doit contenir vision.qgz et saisie.gpkg, trouvé : ${JSON.stringify(noms)}`);
+  const attendus = [NOM_QGZ, NOM_GPKG, ...CHEMINS_CACHE_VIDES].sort();
+  if (noms.length !== attendus.length || attendus.some((n, i) => noms[i] !== n)) throw new Error(`${ZIP_PREMIERE_INSTALLATION} doit contenir vision.qgz, saisie.gpkg et les trois GeoPackage vides du cache ONF (${CHEMINS_CACHE_VIDES.join(', ')}), trouvé : ${JSON.stringify(noms)}`);
+}
+
+// Les trois GeoPackage vides du cache, fabriqués à la demande (déterministes à SQLite près, comme saisie.gpkg), rien n'est versé au dépôt.
+function gpkgCachesVides() {
+  const d = mkdtempSync(join(tmpdir(), 'vision-cache-vide-'));
+  try {
+    return CACHE_ONF.couches.map((c, i) => {
+      const f = join(d, c.couche + '.gpkg');
+      ecrireGpkgCacheVide(f, c.couche);
+      return entree(CHEMINS_CACHE_VIDES[i], readFileSync(f));
+    });
+  } finally { rmSync(d, { recursive: true, force: true }); }
 }
 
 export function fabriquerZips(sortie, sources) {
   const qgz = readFileSync(join(sources, NOM_QGZ)), gpkg = readFileSync(join(sources, NOM_GPKG));
   const miseAJour = ecrireZip([entree(NOM_QGZ, qgz)]);
-  const premiere = ecrireZip([entree(NOM_QGZ, qgz), entree(NOM_GPKG, gpkg)]);
+  const premiere = ecrireZip([entree(NOM_QGZ, qgz), entree(NOM_GPKG, gpkg), ...gpkgCachesVides()]);
   verifierMiseAJour(miseAJour); verifierPremiereInstallation(premiere);
   mkdirSync(sortie, { recursive: true });
   const a = join(sortie, ZIP_MISE_A_JOUR), b = join(sortie, ZIP_PREMIERE_INSTALLATION);

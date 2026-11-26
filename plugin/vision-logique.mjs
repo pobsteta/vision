@@ -1395,7 +1395,14 @@ export function demarrerProjet(ctx) {
     if (!estSourceRaster(source)) r.couche.readOnly = true;
     rechargees.push({ zip: e.zip, couche: e.couche });
   }
-  const cache = rechargerCacheOnf(ctx, dossier, entreesCache);
+  // Mission 053, étape 3 : si le projet porte les trois couches du groupe « ONF Cache », il les lit lui-même (chemin fixe) ; sinon
+  // (ancien vision.qgz) les couches du cache sont rechargées en tête de liste, comme avant.
+  const ctxCache = Object.assign({}, ctx, { visionId: visionId });
+  const creation = creerCachesVides(ctxCache);
+  const groupe = groupeDuProjet(ctx);
+  const cache = groupe ? demarrerGroupeCache(ctxCache, groupe, entreesCache, creation) : rechargerCacheOnf(ctx, dossier, entreesCache);
+  if (!groupe && creation.creees.length > 0) cache.creees = creation.creees;
+  if (!groupe && creation.notes.length > 0) cache.notes = creation.notes;
   const fondEmbarque = chargerFondEmbarque(ctx, ctx.dossierProjet);
   const lignes = [];
   if (etat.illisible) lignes.push("registre illisible : il sera remplacé au prochain ajout d'un zip");
@@ -1510,6 +1517,10 @@ export const CACHE_ONF = {
   sorte: 'onf',
   service: 'http://ws.carmencarto.fr/WFS/105/ONF_Forets',
   dossier: '_cache-onf',
+  // Étape 3 (docs/referentiels/cache-zone-qfield.md § 14) : groupe du projet modèle et chemin fixe de ses trois couches,
+  // vision-imports/_cache-onf/actuel/<couche>.gpkg ; le plugin y bascule un cache contrôlé (renommage, puis reload()).
+  groupe: 'ONF Cache',
+  actuel: 'actuel',
   systeme: 'EPSG:2154',
   coteMax: 20000,
   objetsMax: 5000,
@@ -1618,7 +1629,8 @@ export function cacheChemins(dossierProjet, horodatage, couche) {
 }
 
 // Suffixes des fichiers d'une couche du cache (annexes SQLite et GDAL comprises), pour l'effacement d'une génération.
-const SUFFIXES_CACHE = ['.gpkg', '.qml', '.gpkg-wal', '.gpkg-shm', '.gpkg.aux.xml', '.gml', '.gfs'];
+// « .avant.gpkg » : le cache précédent, mis de côté le temps de la bascule (étape 3).
+const SUFFIXES_CACHE = ['.gpkg', '.qml', '.gpkg-wal', '.gpkg-shm', '.gpkg.aux.xml', '.gml', '.gfs', '.avant.gpkg'];
 
 // Garde avant toute écriture ou tout effacement dans le cache : <vision-imports>/_cache-onf/<horodatage>/<couche><suffixe>,
 // rien d'autre (même garde de dossier que les copies : peutEffacer).
@@ -1632,12 +1644,57 @@ export function peutToucherCache(chemin, dossierImports) {
   return false;
 }
 
-// Entrée du registre : { cache: 'onf', couche, chemin: '<horodatage>/<couche>.gpkg', emprise, date (ISO), objets }.
+// ---- groupe « ONF Cache » du projet modèle (étape 3, voie C4 : docs/referentiels/cache-zone-qfield.md § 14)
+
+// Source de la couche du projet, relative au dossier du projet : écrite telle quelle dans vision.qgz (outils/projet-modele.mjs).
+// Un plugin ne peut pas changer le chemin d'une couche du projet (setDataSource n'est pas exposé à QML) : il est fixe.
+export function cacheSourceProjet(couche) {
+  if (coucheOnf(couche) === null) throw new Error('cache ONF : couche inconnue ' + couche);
+  return './' + NOM_DOSSIER_COPIES + '/' + CACHE_ONF.dossier + '/' + CACHE_ONF.actuel + '/' + couche + '.gpkg|layername=' + couche;
+}
+
+// Fichiers d'une bascule vers actuel/ : le GeoPackage actuel (chemin fixe), celui de la nouvelle génération, la sauvegarde de
+// l'actuel (dans la même génération), et les journaux SQLite à surveiller (un -wal resterait derrière un renommage).
+export function cacheCheminsGroupe(dossierProjet, horodatage, couche) {
+  const base = cacheDossier(dossierProjet);
+  if (base === '' || !MOTIF_HORODATAGE.test(String(horodatage)) || coucheOnf(couche) === null) return null;
+  const actuel = base + '/' + CACHE_ONF.actuel + '/' + couche + '.gpkg';
+  const generation = base + '/' + horodatage + '/' + couche;
+  return { relatif: CACHE_ONF.actuel + '/' + couche + '.gpkg', actuel: actuel, nouveau: generation + '.gpkg', sauvegarde: generation + '.avant.gpkg',
+    wal: actuel + '-wal', walNouveau: generation + '.gpkg-wal' };
+}
+
+// Garde de tout renommage ou de toute écriture de GeoPackage vers actuel/ : <vision-imports>/_cache-onf/actuel/<couche>.gpkg,
+// <vision-imports>/_cache-onf/<horodatage>/<couche>.gpkg ou <couche>.avant.gpkg, rien d'autre.
+export function peutRenommerCache(chemin, dossierImports) {
+  if (!peutEffacer(chemin, dossierImports) || String(chemin).indexOf('|') >= 0) return false;
+  const reste = String(chemin).substring(dossierImports.length + 1).split('/');
+  if (reste.length !== 3 || reste[0] !== CACHE_ONF.dossier) return false;
+  const actuel = reste[1] === CACHE_ONF.actuel;
+  if (!actuel && !MOTIF_HORODATAGE.test(reste[1])) return false;
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    const c = CACHE_ONF.couches[i].couche;
+    if (reste[2] === c + '.gpkg' || (!actuel && reste[2] === c + '.avant.gpkg')) return true;
+  }
+  return false;
+}
+
+// Réponse « zone sans objet » de MapServer (forme essayée sur le Samsung à l'essai C4 du 25 novembre 2026, pièce § 14 bis : GML + .gfs lus, écrits en GeoPackage
+// de 0 objet) : de quoi fabriquer, sur un appareil déjà en service, le GeoPackage vide que le projet attend à son chemin fixe.
+export function cacheGmlVide(couche) {
+  if (coucheOnf(couche) === null) throw new Error('cache ONF : couche inconnue ' + couche);
+  return "<?xml version='1.0' encoding=\"UTF-8\" ?>\n"
+    + '<wfs:FeatureCollection xmlns:ms="http://mapserver.gis.umn.edu/mapserver" xmlns:wfs="http://www.opengis.net/wfs" xmlns:gml="http://www.opengis.net/gml">\n'
+    + '   <gml:boundedBy>\n      <gml:null>missing</gml:null>\n   </gml:boundedBy>\n</wfs:FeatureCollection>\n';
+}
+
+// Entrée du registre : { cache: 'onf', couche, chemin: '<horodatage>/<couche>.gpkg' ou 'actuel/<couche>.gpkg', emprise, date (ISO), objets }.
 function entreeDuCacheSaine(e) {
   if (e.cache !== CACHE_ONF.sorte || e.zip !== undefined || coucheOnf(e.couche) === null) return false;
   if (typeof e.chemin !== 'string' || e.chemin.indexOf('|') >= 0 || e.chemin.indexOf('\\') >= 0) return false;
   const segs = e.chemin.split('/');
-  if (segs.length !== 2 || !MOTIF_HORODATAGE.test(segs[0]) || segs[1] !== e.couche + '.gpkg') return false;
+  // Une génération (<horodatage>/<couche>.gpkg, mode ancien) ou le chemin fixe du groupe du projet (actuel/<couche>.gpkg).
+  if (segs.length !== 2 || (!MOTIF_HORODATAGE.test(segs[0]) && segs[0] !== CACHE_ONF.actuel) || segs[1] !== e.couche + '.gpkg') return false;
   if (typeof e.objets !== 'number' || !(e.objets >= 0) || Math.floor(e.objets) !== e.objets || e.objets > CACHE_ONF.objetsMax) return false;
   return typeof e.date === 'string' && isFinite(new Date(e.date).getTime());
 }
@@ -1886,9 +1943,9 @@ function controlerCoucheCache(ctx, couche, c, attendus) {
   return '';
 }
 
-// Une couche : GML et .gfs écrits, GML ouvert et contrôlé, GeoPackage écrit, style écrit à côté, GeoPackage relu et contrôlé.
-// Rend { ok, couche (la copie relue), raison }.
-function enregistrerCouche(ctx, c, reponse, horodatage) {
+// Une couche : GML et .gfs écrits, GML ouvert et contrôlé, GeoPackage écrit, style écrit à côté (mode ancien seulement : en mode
+// groupe, le style est celui du projet), GeoPackage relu et contrôlé. Rend { ok, couche (la copie relue), raison }.
+function enregistrerCouche(ctx, c, reponse, horodatage, avecStyle) {
   const p = cacheChemins(ctx.dossierProjet, horodatage, c.couche);
   const dossierImports = dossierCopies(ctx.dossierProjet);
   // Diagnostic (aller-retour 2/3) : étape, couche en cause décrite, chemins, présence des fichiers ; jamais affiché.
@@ -1904,8 +1961,8 @@ function enregistrerCouche(ctx, c, reponse, horodatage) {
   if (p === null) return echec('chemins');
   for (const k of ['gml', 'gfs', 'gpkg', 'qml']) if (!peutToucherCache(p[k], dossierImports)) return echec('chemin refusé ' + p[k]);
   etape = 'style';
-  const style = ctx.styles && typeof ctx.styles[c.couche] === 'string' ? ctx.styles[c.couche] : '';
-  if (style === '') return echec('style absent');
+  const style = avecStyle && ctx.styles && typeof ctx.styles[c.couche] === 'string' ? ctx.styles[c.couche] : '';
+  if (avecStyle && style === '') return echec('style absent');
   etape = 'écriture du GML et du .gfs';
   let ecrit = false;
   try { ecrit = ctx.ecrireFichier(p.gml, reponse.texte) === true; } catch (e) { ecrit = false; }
@@ -1928,9 +1985,11 @@ function enregistrerCouche(ctx, c, reponse, horodatage) {
   etape = 'réécriture en GeoPackage';
   try { rendu = String(ctx.reecrireCouche(g, p.gpkg) || ''); } catch (e) { rendu = ''; }
   if (rendu !== p.gpkg) return echec('GeoPackage non écrit (' + rendu + ')');
-  etape = 'écriture du style';
-  try { ecrit = ctx.ecrireFichier(p.qml, style) === true; } catch (e) { ecrit = false; }
-  if (!ecrit) return echec('style non écrit');
+  if (avecStyle) {
+    etape = 'écriture du style';
+    try { ecrit = ctx.ecrireFichier(p.qml, style) === true; } catch (e) { ecrit = false; }
+    if (!ecrit) return echec('style non écrit');
+  }
   let copie = null;
   etape = 'contrôle du GeoPackage relu';
   try { copie = ctx.ouvrirCouche(p.gpkg + '|layername=' + c.couche, c.nom); } catch (e) { copie = null; }
@@ -1940,13 +1999,115 @@ function enregistrerCouche(ctx, c, reponse, horodatage) {
   return { ok: true, couche: copie, raison: '' };
 }
 
+// ---- mode groupe (étape 3, voie C4 : docs/referentiels/cache-zone-qfield.md § 14)
+
+// Les trois couches du groupe « ONF Cache » du projet (marques vision/cache=onf et vision/couche, ctx.coucheDuGroupe(couche) dans
+// Vision.qml), ou null : le mode groupe exige les trois ; sinon (ancien vision.qgz) le mode ancien (en tête de liste) reste.
+function groupeDuProjet(ctx) {
+  if (!ctx || typeof ctx.coucheDuGroupe !== 'function') return null;
+  const g = {};
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    let l = null;
+    try { l = ctx.coucheDuGroupe(CACHE_ONF.couches[i].couche); } catch (e) { l = null; }
+    if (!l) return null;
+    g[CACHE_ONF.couches[i].couche] = l;
+  }
+  return g;
+}
+
+function presentSur(ctx, chemin) {
+  try { return !!ctx.existe(chemin); } catch (e) { return false; }
+}
+
+// Bascule par renommage (§ 14.2), tout ou rien. Pour chaque couche : le GeoPackage actuel est mis de côté (<génération>/<couche>.avant.gpkg),
+// puis celui de la génération prend sa place (actuel/<couche>.gpkg) ; ensuite reload() et triggerRepaint() sur les couches du projet
+// (ctx.recharger), et contrôle de ce que la couche AFFICHE (valide, nombre d'objets attendu). Au moindre refus ou écart : renommages
+// inverses (ordre inverse), nouveau reload. `attendus` = { <couche>: nombre d'objets }. Rend { ok, raison, etape, details, defait,
+// defaire() } : `defait` vrai si l'état d'avant est rétabli (ou n'a jamais changé) ; `defaire()` rend les renommages inverses
+// réussis (à appeler si l'inscription au registre échoue après une bascule réussie). Ne lève jamais.
+function basculerGeneration(ctx, groupe, horodatage, attendus) {
+  const dossierImports = dossierCopies(ctx.dossierProjet);
+  const fait = [];
+  const plan = [];
+  const rechargerTout = () => {
+    for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+      try { ctx.recharger(groupe[CACHE_ONF.couches[i].couche]); } catch (e) { /* contrôlé ensuite */ }
+    }
+  };
+  // Un renommage jamais vers un fichier existant (renameFile avec « overwrite » l'effacerait) ni hors de la garde.
+  const renommer = (de, vers) => {
+    if (!peutRenommerCache(de, dossierImports) || !peutRenommerCache(vers, dossierImports) || presentSur(ctx, vers)) return false;
+    let ok = false;
+    try { ok = ctx.renommer(de, vers) === true; } catch (e) { ok = false; }
+    return ok;
+  };
+  const defaire = () => {
+    const rates = [];
+    for (let i = fait.length - 1; i >= 0; i--) {
+      if (renommer(fait[i].vers, fait[i].de)) fait.splice(i, 1); else rates.push(fait[i].vers + ' -> ' + fait[i].de);
+    }
+    rechargerTout();
+    return rates;
+  };
+  const echec = (raison, etape, details, avecRetour) => {
+    let rates = [];
+    if (avecRetour) rates = defaire();
+    const incomplet = rates.length > 0;
+    return { ok: false, raison: raison + (incomplet ? ' ; retour arrière incomplet : ' + rates.join(', ') : ''), etape: etape, defait: !incomplet,
+      details: Object.assign({ horodatage: horodatage, retourArriere: incomplet ? rates : 'complet', renommages: fait.length }, details || {}) };
+  };
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    const c = CACHE_ONF.couches[i];
+    const p = cacheCheminsGroupe(ctx.dossierProjet, horodatage, c.couche);
+    if (p === null) return echec(c.couche + ' : chemins', 'bascule : plan', null, false);
+    if (!presentSur(ctx, p.nouveau)) return echec(c.couche + ' : GeoPackage de la génération absent', 'bascule : plan', { chemin: p.nouveau }, false);
+    if (presentSur(ctx, p.wal) || presentSur(ctx, p.walNouveau)) return echec(c.couche + ' : journal SQLite (-wal) présent à côté du GeoPackage', 'bascule : plan', { wal: presentSur(ctx, p.wal) ? p.wal : p.walNouveau }, false);
+    if (presentSur(ctx, p.sauvegarde)) return echec(c.couche + ' : sauvegarde déjà présente', 'bascule : plan', { chemin: p.sauvegarde }, false);
+    plan.push({ c: c, p: p, avait: presentSur(ctx, p.actuel) });
+  }
+  for (let i = 0; i < plan.length; i++) {
+    const x = plan[i];
+    if (x.avait) {
+      if (!renommer(x.p.actuel, x.p.sauvegarde)) return echec(x.c.couche + ' : renommage refusé (actuel mis de côté)', 'bascule : renommage', { de: x.p.actuel, vers: x.p.sauvegarde }, true);
+      fait.push({ de: x.p.actuel, vers: x.p.sauvegarde });
+    }
+    if (!renommer(x.p.nouveau, x.p.actuel)) return echec(x.c.couche + ' : renommage refusé (nouveau vers actuel)', 'bascule : renommage', { de: x.p.nouveau, vers: x.p.actuel }, true);
+    fait.push({ de: x.p.nouveau, vers: x.p.actuel });
+  }
+  rechargerTout();
+  const ecarts = [];
+  for (let i = 0; i < plan.length; i++) {
+    const code = plan[i].c.couche;
+    const l = groupe[code];
+    let valide = false;
+    try { valide = l.isValid === true; } catch (e) { valide = false; }
+    const n = valide ? compterObjets(l, ctx.creerIterateur) : -1;
+    if (!valide || n !== attendus[code]) ecarts.push(code + ' : ' + (valide ? n + ' objets affichés, ' + attendus[code] + ' attendus' : 'couche invalide après reload'));
+  }
+  if (ecarts.length > 0) return echec('la couche affichée n\'est pas celle attendue (' + ecarts.join(' ; ') + ')', 'bascule : relecture', { ecarts: ecarts }, true);
+  return { ok: true, raison: '', etape: 'bascule', details: null, defait: false, defaire: defaire, plan: plan };
+}
+
+// Remplace les entrées du cache ONF du registre par `entrees`, les autres (zips) gardées dans leur ordre.
+function remplacerEntreesCache(ctx, entrees) {
+  const garde = [];
+  const liste = lireRegistre(ctx.reglages, ctx.visionId);
+  for (let i = 0; i < liste.length; i++) if (!(liste[i] && typeof liste[i] === 'object' && liste[i].cache === CACHE_ONF.sorte)) garde.push(liste[i]);
+  ecrireRegistre(ctx.reglages, ctx.visionId, garde.concat(entrees));
+}
+
 // Enregistrement du cache, une fois les trois réponses reçues et jugées bonnes (tout ou rien, arbitrage n° 7) :
 // ctx = { visionId, dossierProjet, reglages, horodatage, date, emprise, reponses: { <couche>: { texte, nbObjets } }, styles,
 //   vraisemblance, ecrireFichier, effacerFichier, existe, ouvrirCouche(uri, nom), creerIterateur, imposerSysteme(couche),
-//   reecrireCouche(couche, cible), retirerCacheDeLaCarte(), ajouterCache(couche, nomCouche) }.
-// Les trois couches sont écrites dans une NOUVELLE génération et contrôlées ; seulement si les trois passent : l'ancien cache
-// quitte la carte, le nouveau y entre (en tête de liste, lecture seule), le registre est remplacé, l'ancienne génération est
-// effacée. Sinon la nouvelle génération est effacée, l'ancien cache reste affiché et inscrit. Rend { ok, message, compte, raison }.
+//   reecrireCouche(couche, cible), et selon le mode :
+//   mode groupe (le projet porte les trois couches marquées : coucheDuGroupe(couche) les rend) : renommer(de, vers), recharger(couche) ;
+//   mode ancien (ancien vision.qgz) : retirerCacheDeLaCarte(), ajouterCache(couche, nomCouche) }.
+// Les trois couches sont écrites dans une NOUVELLE génération et contrôlées ; seulement si les trois passent :
+// - mode groupe : bascule par renommage vers actuel/ et reload() (basculerGeneration), registre sur actuel/, sauvegardes effacées ;
+//   la couche du projet n'est jamais ajoutée ni retirée de la carte ;
+// - mode ancien : l'ancien cache quitte la carte, le nouveau y entre (en tête de liste, lecture seule), registre remplacé,
+//   ancienne génération effacée.
+// Sinon la nouvelle génération est effacée, l'ancien cache reste affiché et inscrit. Rend { ok, message, compte, raison }.
 // `ctx.depart` (facultatif) : { visionId, dossierProjet } au moment du bouton ; un autre projet ouvert pendant le
 // téléchargement fait tout refuser (même garde que zipRecu dans Vision.qml). Registre illisible : refus, il n'est pas
 // remplacé par le cache (seul l'ajout d'un zip le remplace, comme le dit le message d'ouverture de demarrerProjet).
@@ -1956,8 +2117,23 @@ export function cacheEnregistrer(ctx) {
   if (!ctx || !estUuid(ctx.visionId) || cacheDossier(ctx.dossierProjet) === '' || !MOTIF_HORODATAGE.test(String(ctx.horodatage))) return echec('contexte');
   if (ctx.depart && (ctx.depart.visionId !== ctx.visionId || ctx.depart.dossierProjet !== ctx.dossierProjet)) return echec('projet changé pendant le téléchargement');
   if (etatRegistre(ctx.reglages, ctx.visionId).illisible) return echec('registre illisible');
-  for (const s of ['ecrireFichier', 'effacerFichier', 'ouvrirCouche', 'creerIterateur', 'imposerSysteme', 'reecrireCouche', 'retirerCacheDeLaCarte', 'ajouterCache']) {
+  const groupe = groupeDuProjet(ctx);
+  const services = ['ecrireFichier', 'effacerFichier', 'ouvrirCouche', 'creerIterateur', 'imposerSysteme', 'reecrireCouche']
+    .concat(groupe ? ['renommer', 'recharger'] : ['retirerCacheDeLaCarte', 'ajouterCache']);
+  for (const s of services) {
     if (typeof ctx[s] !== 'function') return echec('service absent : ' + s);
+  }
+  if (groupe) {
+    // Avant toute écriture : une couche du projet invalide (fichier absent ou illisible à l'ouverture) ne se répare pas par reload()
+    // (QgsMapLayer::reload ne passe pas par setValid, § 14.1) ; un -wal à côté d'un GeoPackage actuel serait rejoué sur un autre fichier.
+    for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+      const code = CACHE_ONF.couches[i].couche;
+      let valide = false;
+      try { valide = groupe[code].isValid === true; } catch (e) { valide = false; }
+      if (!valide) return echec(code + ' : couche du projet invalide (à rouvrir le projet : reload() ne la répare pas)', 'groupe : couche invalide', { couche: code });
+      const p = cacheCheminsGroupe(ctx.dossierProjet, ctx.horodatage, code);
+      if (p !== null && presentSur(ctx, p.wal)) return echec(code + ' : journal SQLite (-wal) à côté du GeoPackage actuel', 'groupe : -wal', { wal: p.wal });
+    }
   }
   const anciennes = entreesDuCache(lireRegistre(ctx.reglages, ctx.visionId));
   const copies = [];
@@ -1968,7 +2144,7 @@ export function cacheEnregistrer(ctx) {
     if (!rep || typeof rep.texte !== 'string' || typeof rep.nbObjets !== 'number') { effacerGeneration(ctx, ctx.horodatage); return echec(c.couche + ' : réponse absente'); }
     let r = null;
     try {
-      r = enregistrerCouche(ctx, c, rep, ctx.horodatage);
+      r = enregistrerCouche(ctx, c, rep, ctx.horodatage, !groupe);
     } catch (e) {
       r = { ok: false, raison: c.couche + ' : exception', etape: 'exception', details: { couche: c.couche, exception: texteException(e) } };
     }
@@ -1976,33 +2152,152 @@ export function cacheEnregistrer(ctx) {
     copies.push({ c: c, couche: r.couche });
     compte[c.couche] = rep.nbObjets;
   }
-  // Les trois passent : remplacement.
-  try { ctx.retirerCacheDeLaCarte(); } catch (e) { /* l'ajout suit */ }
-  for (let i = 0; i < copies.length; i++) {
-    try { copies[i].couche.readOnly = true; } catch (e) { /* lecture seule : propriété de QgsVectorLayer */ }
-    try { ctx.ajouterCache(copies[i].couche, copies[i].c.couche); } catch (e) { /* le registre fait foi à la réouverture */ }
-  }
   const date = ctx.date instanceof Date ? ctx.date : new Date();
-  const garde = [];
-  const liste = lireRegistre(ctx.reglages, ctx.visionId);
-  for (let i = 0; i < liste.length; i++) if (!(liste[i] && typeof liste[i] === 'object' && liste[i].cache === CACHE_ONF.sorte)) garde.push(liste[i]);
-  for (let i = 0; i < copies.length; i++) {
-    const c = copies[i].c;
-    garde.push({ cache: CACHE_ONF.sorte, couche: c.couche, chemin: ctx.horodatage + '/' + c.couche + '.gpkg',
-      emprise: ctx.emprise, date: date.toISOString(), objets: compte[c.couche] });
-  }
-  ecrireRegistre(ctx.reglages, ctx.visionId, garde);
-  // Fichiers de travail de la nouvelle génération, puis l'ancienne génération (jamais celle qu'on vient d'écrire).
-  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
-    const p = cacheChemins(ctx.dossierProjet, ctx.horodatage, CACHE_ONF.couches[i].couche);
-    if (p !== null) { effacerFichierCache(ctx, p.gml); effacerFichierCache(ctx, p.gfs); }
+  const entrees = (chemin) => CACHE_ONF.couches.map((c) => ({ cache: CACHE_ONF.sorte, couche: c.couche, chemin: chemin(c), emprise: ctx.emprise,
+    date: date.toISOString(), objets: compte[c.couche] }));
+  if (groupe) {
+    // Les trois passent : bascule dans le projet (jamais d'ajout ni de retrait de couche).
+    const b = basculerGeneration(ctx, groupe, ctx.horodatage, compte);
+    if (!b.ok) {
+      // Retour arrière incomplet : la génération (et la sauvegarde de l'ancien cache qu'elle porte) n'est PAS effacée.
+      if (b.defait) effacerGeneration(ctx, ctx.horodatage);
+      return echec(b.raison, b.etape, b.details);
+    }
+    try {
+      remplacerEntreesCache(ctx, entrees((c) => CACHE_ONF.actuel + '/' + c.couche + '.gpkg'));
+    } catch (e) {
+      const rates = b.defaire();
+      if (rates.length === 0) effacerGeneration(ctx, ctx.horodatage);
+      return echec('registre non écrit : ' + texteException(e) + (rates.length > 0 ? ' ; retour arrière incomplet : ' + rates.join(', ') : ''), 'registre', null);
+    }
+    // Fichiers de travail et sauvegardes de l'ancien cache, effacés une fois le registre à jour (le GeoPackage de la génération est
+    // devenu l'actuel : effacerGeneration ne le trouve plus à son ancien nom).
+    effacerGeneration(ctx, ctx.horodatage);
+  } else {
+    // Les trois passent : remplacement en tête de liste.
+    try { ctx.retirerCacheDeLaCarte(); } catch (e) { /* l'ajout suit */ }
+    for (let i = 0; i < copies.length; i++) {
+      try { copies[i].couche.readOnly = true; } catch (e) { /* lecture seule : propriété de QgsVectorLayer */ }
+      try { ctx.ajouterCache(copies[i].couche, copies[i].c.couche); } catch (e) { /* le registre fait foi à la réouverture */ }
+    }
+    remplacerEntreesCache(ctx, entrees((c) => ctx.horodatage + '/' + c.couche + '.gpkg'));
+    // Fichiers de travail de la nouvelle génération (l'ancienne est effacée plus bas, jamais celle qu'on vient d'écrire).
+    for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+      const p = cacheChemins(ctx.dossierProjet, ctx.horodatage, CACHE_ONF.couches[i].couche);
+      if (p !== null) { effacerFichierCache(ctx, p.gml); effacerFichierCache(ctx, p.gfs); }
+    }
   }
   const vues = {};
   for (let i = 0; i < anciennes.length; i++) {
     const h = anciennes[i].chemin.split('/')[0];
-    if (h !== ctx.horodatage && !vues[h]) { vues[h] = true; effacerGeneration(ctx, h); }
+    if (h !== ctx.horodatage && h !== CACHE_ONF.actuel && !vues[h]) { vues[h] = true; effacerGeneration(ctx, h); }
   }
   return { ok: true, message: messageCacheReussi(compte, date), compte: compte, raison: '' };
+}
+
+// ---- ouverture du projet en mode groupe (§ 14.3 et § 14.4)
+
+// Crée le GeoPackage vide d'une couche à son chemin fixe, par la voie prouvée (GML sans objet + .gfs écrits, ouverts par GDAL,
+// réécrits par saveVectorLayerAs : essai C4 du 25 novembre 2026, « vide : valide, 0 objet »). Jamais sur un fichier existant
+// (saveVectorLayerAs écrase sans contrôle) ; le GeoPackage créé n'est PAS rouvert par une couche de travail (son jeu de données GDAL
+// serait partagé avec la couche du projet, et fausserait la relecture après une bascule). Rend '' si créé, sinon la raison.
+function creerCacheVide(ctx, c, horodatage) {
+  for (const s of ['ecrireFichier', 'effacerFichier', 'ouvrirCouche', 'creerIterateur', 'reecrireCouche']) {
+    if (typeof ctx[s] !== 'function') return 'service absent : ' + s;
+  }
+  const dossierImports = dossierCopies(ctx.dossierProjet);
+  const p = cacheChemins(ctx.dossierProjet, horodatage, c.couche);
+  const g = cacheCheminsGroupe(ctx.dossierProjet, horodatage, c.couche);
+  if (p === null || g === null) return 'chemins';
+  if (!peutToucherCache(p.gml, dossierImports) || !peutToucherCache(p.gfs, dossierImports) || !peutRenommerCache(g.actuel, dossierImports)) return 'chemin refusé';
+  if (presentSur(ctx, g.actuel)) return 'fichier déjà présent';
+  let raison = '';
+  try {
+    if (ctx.ecrireFichier(p.gml, cacheGmlVide(c.couche)) !== true) return 'écriture du GML refusée';
+    if (ctx.ecrireFichier(p.gfs, cacheGfs(c.couche, 'msGeometry')) !== true) return 'écriture du .gfs refusée';
+    const l = ctx.ouvrirCouche(cacheSourceGml(p, c.couche), c.couche);
+    if (!l || l.isValid !== true) return 'GML vide illisible';
+    if (systemeDe(l) === '' && typeof ctx.imposerSysteme === 'function') { try { ctx.imposerSysteme(l); } catch (e) { /* refusé au contrôle */ } }
+    raison = controlerCoucheCache(ctx, l, c, 0);
+    if (raison !== '') return 'GML vide : ' + raison;
+    const rendu = String(ctx.reecrireCouche(l, g.actuel) || '');
+    if (rendu !== g.actuel) return 'GeoPackage non écrit (' + rendu + ')';
+    return '';
+  } catch (e) {
+    return 'exception : ' + texteException(e);
+  } finally {
+    effacerFichierCache(ctx, p.gml);
+    effacerFichierCache(ctx, p.gfs);
+  }
+}
+
+// À toute ouverture d'un projet Vision, y compris avec l'ancien vision.qgz (§ 14.3, « plugin d'abord, puis vision.qgz ») : crée les
+// GeoPackage vides absents de vision-imports/_cache-onf/actuel/, pour que le nouveau vision.qgz, copié ensuite, ne produise pas la
+// page « Impossible de charger certaines couches ». Sans les services d'écriture, rien n'est tenté. Rend { creees, notes }.
+function creerCachesVides(ctx) {
+  const r = { creees: [], notes: [] };
+  const services = ['existe', 'ecrireFichier', 'effacerFichier', 'ouvrirCouche', 'creerIterateur', 'reecrireCouche'].every((s) => typeof ctx[s] === 'function');
+  if (!services) return r;
+  const maintenant = typeof ctx.maintenant === 'function' ? ctx.maintenant() : new Date();
+  const horodatage = cacheHorodatage(maintenant);
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    const c = CACHE_ONF.couches[i];
+    const g = cacheCheminsGroupe(ctx.dossierProjet, horodatage, c.couche);
+    if (g === null || presentSur(ctx, g.actuel)) continue;
+    const raison = creerCacheVide(ctx, c, horodatage);
+    if (raison === '') r.creees.push(c.couche); else r.notes.push(c.couche + ' : GeoPackage vide non créé (' + raison + ')');
+  }
+  return r;
+}
+
+// Ouverture du projet en mode groupe : QGIS a déjà lu les trois couches du projet ; il reste (1) à migrer un cache en génération vers
+// actuel/ (§ 14.4 : hors réseau), (2) à dire ce qui n'est pas affiché. Aucune couche n'est ajoutée, retirée ni libérée.
+// `creation` : ce que creerCachesVides vient de faire (un fichier créé à l'instant ne rend pas valide la couche du projet).
+// Rend { rechargees (couches valides), manquantes (non affichées, texte « Cache ONF illisible… »), creees, migrees, notes }.
+function demarrerGroupeCache(ctx, groupe, entrees, creation) {
+  const bilan = { rechargees: [], manquantes: [], creees: creation.creees.slice(), migrees: [], notes: creation.notes.slice() };
+  // Migration : trois entrées, toutes en génération, de la même génération.
+  const cache = entreesDuCache(entrees);
+  const enGeneration = cache.filter((e) => e.chemin.split('/')[0] !== CACHE_ONF.actuel);
+  let nonMigre = false;
+  if (enGeneration.length > 0) {
+    const h = enGeneration[0].chemin.split('/')[0];
+    const memeGeneration = enGeneration.length === CACHE_ONF.couches.length && enGeneration.every((e) => e.chemin.split('/')[0] === h);
+    const services = typeof ctx.renommer === 'function' && typeof ctx.recharger === 'function' && typeof ctx.creerIterateur === 'function';
+    const valides = CACHE_ONF.couches.every((c) => { try { return groupe[c.couche].isValid === true; } catch (e) { return false; } });
+    const attendus = {};
+    for (const e of enGeneration) attendus[e.couche] = e.objets;
+    if (!memeGeneration) { nonMigre = true; bilan.notes.push('migration : génération incomplète ou mêlée dans le registre'); }
+    else if (!services) { nonMigre = true; bilan.notes.push('migration : services de bascule absents'); }
+    else if (!valides) { nonMigre = true; bilan.notes.push('migration : une couche du projet est invalide (fichier créé à l\'instant : rouvrir le projet)'); }
+    else {
+      const b = basculerGeneration(ctx, groupe, h, attendus);
+      if (!b.ok) { nonMigre = true; bilan.notes.push('migration : ' + b.raison + ' (' + b.etape + ')'); }
+      else {
+        try {
+          const nouvelles = enGeneration.map((e) => Object.assign({}, e, { chemin: CACHE_ONF.actuel + '/' + e.couche + '.gpkg' }));
+          remplacerEntreesCache(ctx, nouvelles);
+          effacerGeneration(ctx, h);
+          bilan.migrees = CACHE_ONF.couches.map((c) => c.couche);
+        } catch (e) {
+          nonMigre = true;
+          const rates = b.defaire();
+          bilan.notes.push('migration : registre non écrit (' + texteException(e) + ')' + (rates.length > 0 ? ' ; retour arrière incomplet' : ''));
+        }
+      }
+    }
+  }
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    const code = CACHE_ONF.couches[i].couche;
+    let valide = false;
+    try { valide = groupe[code].isValid === true; } catch (e) { valide = false; }
+    // Un fichier créé à l'instant ne rend pas valide la couche du projet (reload() ne la répare pas) : QField a sa propre page ;
+    // le plugin ne dit « illisible » que d'une couche dont le fichier existait ou d'un cache enregistré mais non affiché.
+    if (nonMigre) bilan.manquantes.push(code);
+    else if (valide) bilan.rechargees.push(code);
+    else if (bilan.creees.indexOf(code) < 0) bilan.manquantes.push(code);
+  }
+  return bilan;
 }
 
 // Réouverture du projet : couches du cache rechargées depuis le disque (sans réseau), marquées par ctx.chargerCache(source,
@@ -2087,139 +2382,3 @@ export function cacheTexteDiagnostic(d) {
   ajouter('', x.details);
   return lignes.join('\n') + '\n';
 }
-
-// ==== sonde C4 : début (outil d'essai, mission 053, étape 3, temps 2 ; docs/referentiels/cache-zone-qfield.md § 14 bis)
-// À RETIRER AVANT TOUTE FUSION VERS MAIN (tests/sonde-c4-053.test.mjs, « garde » : la sonde ne vit qu'avec VERSION 0.7.0).
-// Mesure sur le Samsung ce que la voie C4 + bascule (§ 14) suppose : une couche de la carte dont le GeoPackage est remplacé
-// par renommage (platformUtilities.renameFile) puis relu par couche.reload() ; un GeoPackage vide valide. Rien au registre,
-// rien au cache ONF, fichier du projet non modifié ; fichiers dans vision-imports/_sonde-c4/ ; une couche « Sonde C4 (essai) » est
-// ajoutée à la carte et se retire par un bouton. Textes provisoires (outil d'essai).
-export const SONDE_C4 = { dossier: '_sonde-c4', table: 'SONDE_C4', nom: 'Sonde C4 (essai)', x: 895717, y: 6679283 };
-
-export function sondeC4Chemins(dossierProjet) {
-  const d = dossierCopies(dossierProjet);
-  if (d === '') return null;
-  const base = d + '/' + SONDE_C4.dossier;
-  const f = '/' + SONDE_C4.table + '.gpkg';
-  return { dossier: base, actuel: base + '/actuel' + f, b: base + '/b' + f, sauvegarde: base + '/sauvegarde' + f, vide: base + '/vide' + f, travail: base + '/travail' };
-}
-
-export function sondeC4NomRapport(date) {
-  return 'rapport-' + cacheHorodatage(date) + '.txt';
-}
-
-// GML 2 de forme MapServer : n points en EPSG:2154 (x est, y nord), espacés de 100 m vers le nord à partir du point de la
-// Serre décalé de `dx` mètres vers l'est (x 895 717, y 6 679 283 : point du terrain de la mission, vérifié par pyproj).
-export function sondeC4Gml(n, dx) {
-  let m = '';
-  for (let i = 0; i < n; i++) {
-    const x = SONDE_C4.x + (dx || 0);
-    const y = SONDE_C4.y + 100 * i;
-    m += `    <gml:featureMember>\n      <ms:${SONDE_C4.table}>\n        <ms:msGeometry><gml:Point srsName="EPSG:2154"><gml:coordinates>${x},${y}</gml:coordinates></gml:Point></ms:msGeometry>\n`
-      + `        <ms:nom>point d'essai n° ${i + 1}</ms:nom>\n      </ms:${SONDE_C4.table}>\n    </gml:featureMember>\n`;
-  }
-  if (n === 0) m = '   <gml:boundedBy>\n      <gml:null>missing</gml:null>\n   </gml:boundedBy>\n';
-  return `<?xml version='1.0' encoding="UTF-8" ?>\n<wfs:FeatureCollection xmlns:ms="http://mapserver.gis.umn.edu/mapserver" `
-    + `xmlns:wfs="http://www.opengis.net/wfs" xmlns:gml="http://www.opengis.net/gml">\n${m}</wfs:FeatureCollection>\n`;
-}
-
-export function sondeC4Gfs() {
-  return '<GMLFeatureClassList>\n  <GMLFeatureClass>\n'
-    + `    <Name>${SONDE_C4.table}</Name>\n    <ElementPath>${SONDE_C4.table}</ElementPath>\n`
-    + '    <GeometryName>msGeometry</GeometryName>\n    <GeometryElementPath>msGeometry</GeometryElementPath>\n'
-    + '    <GeometryType>1</GeometryType>\n    <SRSName>EPSG:2154</SRSName>\n'
-    + '    <PropertyDefn>\n      <Name>nom</Name>\n      <ElementPath>nom</ElementPath>\n      <Type>String</Type>\n    </PropertyDefn>\n'
-    + '  </GMLFeatureClass>\n</GMLFeatureClassList>\n';
-}
-
-function sondeC4Annexes(s, gpkg) {
-  const etat = (c) => { try { return s.existe(c) ? 'PRÉSENT' : 'absent'; } catch (e) { return 'illisible'; } };
-  return '-wal : ' + etat(gpkg + '-wal') + ', -shm : ' + etat(gpkg + '-shm');
-}
-
-function sondeC4Decrire(s, couche) {
-  const d = decrireCoucheCache({ creerIterateur: s.creerIterateur }, couche);
-  if (d.valide !== true) return 'INVALIDE';
-  return 'valide, ' + d.objets + (d.objets < 2 ? ' objet' : ' objets') + ', WKB ' + d.wkb + ', système ' + (d.systeme || 'inconnu');
-}
-
-// GML + .gfs écrits dans travail/, ouverts par le pilote GML, réécrits en GeoPackage `cible`. Rend '' ou la raison.
-function sondeC4EcrireGpkg(s, c, nomGml, n, dx, cible) {
-  const gml = c.travail + '/' + nomGml + '.gml';
-  if (s.ecrireFichier(gml, sondeC4Gml(n, dx)) !== true || s.ecrireFichier(c.travail + '/' + nomGml + '.gfs', sondeC4Gfs()) !== true) return 'écriture du GML refusée';
-  const g = s.ouvrir(gml + '|layername=' + SONDE_C4.table + '|option:EXPOSE_GML_ID=NO', SONDE_C4.table);
-  if (!g || g.isValid !== true) return 'GML illisible';
-  const r = String(s.reecrire(g, cible) || '');
-  return r === cible ? '' : 'GeoPackage non écrit (' + r + ')';
-}
-
-// Bouton 1 : A (2 objets) au chemin fixe, GeoPackage vide, A ajouté à la carte. s = { ecrireFichier, existe, ouvrir(uri, nom),
-// reecrire(couche, cible), creerIterateur, ajouter(couche) }. Rend { ok, lignes, couche }.
-export function sondeC4Preparer(dossierProjet, s) {
-  const lignes = ["Sonde C4 (outil d'essai, textes provisoires) : préparation"];
-  const fin = (ok, couche) => ({ ok: ok, lignes: lignes, couche: couche || null });
-  const c = sondeC4Chemins(dossierProjet);
-  if (c === null) { lignes.push('dossier du projet inconnu : sonde arrêtée'); return fin(false); }
-  try {
-    // A n'est ouvert QUE par la couche de la carte : une seconde couche sur le même fichier partagerait le jeu de données
-    // GDAL (pool de QGIS) et fausserait la relecture après bascule.
-    let e = sondeC4EcrireGpkg(s, c, 'a', 2, 0, c.actuel);
-    if (e !== '') { lignes.push('A (actuel) : ' + e); return fin(false); }
-    e = sondeC4EcrireGpkg(s, c, 'vide', 0, 0, c.vide);
-    if (e !== '') { lignes.push('vide : ' + e); return fin(false); }
-    lignes.push('vide : ' + sondeC4Decrire(s, s.ouvrir(c.vide + '|layername=' + SONDE_C4.table, 'sonde vide')) + ' (' + c.vide + ')');
-    const couche = s.ouvrir(c.actuel + '|layername=' + SONDE_C4.table, SONDE_C4.nom);
-    if (!couche || couche.isValid !== true) { lignes.push('A (actuel) : INVALIDE, couche de sonde non ajoutée'); return fin(false); }
-    lignes.push('A (actuel) : ' + sondeC4Decrire(s, couche) + ' (' + c.actuel + ')');
-    s.ajouter(couche);
-    lignes.push('couche de sonde ajoutée à la carte : « ' + SONDE_C4.nom + ' »');
-    lignes.push('annexes de A après ouverture : ' + sondeC4Annexes(s, c.actuel));
-    return fin(true, couche);
-  } catch (e) {
-    lignes.push('EXCEPTION : ' + texteException(e));
-    return fin(false);
-  }
-}
-
-// Bouton 2 : B (3 objets, 500 m à l'est) écrit, A mis de côté, B renommé au chemin de A, reload() de la couche de la carte ;
-// puis retour arrière (renommages inverses, reload). s = services de sondeC4Preparer + renommer(de, vers), recharger(couche),
-// maintenant() (ms). Rend { ok, lignes, apres, retour }.
-export function sondeC4Bascule(dossierProjet, s, couche) {
-  const lignes = ["Sonde C4 (outil d'essai, textes provisoires) : bascule et relecture"];
-  const r = { ok: false, lignes: lignes, apres: -1, retour: -1 };
-  const c = sondeC4Chemins(dossierProjet);
-  if (c === null || !couche) { lignes.push('aucune couche de sonde sur la carte : faire d\'abord « préparer et afficher »'); return r; }
-  const compter = () => compterObjets(couche, s.creerIterateur);
-  try {
-    const e = sondeC4EcrireGpkg(s, c, 'b', 3, 500, c.b);
-    if (e !== '') { lignes.push('B : ' + e); return r; }
-    lignes.push('B : 3 objets écrits (' + c.b + ') ; couche affichée avant : ' + compter() + ' objets');
-    lignes.push('avant la bascule : ' + sondeC4Annexes(s, c.actuel));
-    const t0 = s.maintenant();
-    if (s.renommer(c.actuel, c.sauvegarde) !== true) { lignes.push('bascule : renommage REFUSÉ (A vers sauvegarde)'); }
-    else if (s.renommer(c.b, c.actuel) !== true) {
-      lignes.push('bascule : renommage REFUSÉ (B vers le chemin de A)');
-      lignes.push('remise en place de A : ' + (s.renommer(c.sauvegarde, c.actuel) === true ? 'faite' : 'REFUSÉE'));
-    } else {
-      s.recharger(couche);
-      r.apres = compter();
-      lignes.push('bascule : renommages réussis, couche affichée relue : ' + r.apres + ' objets (attendu 3), ' + (s.maintenant() - t0) + ' ms');
-      lignes.push('couche après bascule : ' + sondeC4Decrire(s, couche));
-      lignes.push('après la bascule : ' + sondeC4Annexes(s, c.actuel));
-      const ok1 = s.renommer(c.actuel, c.b) === true;
-      const ok2 = ok1 && s.renommer(c.sauvegarde, c.actuel) === true;
-      s.recharger(couche);
-      r.retour = compter();
-      lignes.push('retour arrière : ' + (ok2 ? 'renommages réussis' : 'renommage REFUSÉ') + ', couche relue : ' + r.retour + ' objets (attendu 2)');
-      lignes.push('après le retour arrière : ' + sondeC4Annexes(s, c.actuel));
-    }
-    r.ok = r.apres === 3 && r.retour === 2;
-    lignes.push(r.ok ? 'VERDICT : bascule par renommage puis reload() PROUVÉE (3 objets, puis 2 au retour)' : 'VERDICT : bascule NON PROUVÉE');
-    return r;
-  } catch (e) {
-    lignes.push('EXCEPTION : ' + texteException(e));
-    lignes.push('VERDICT : bascule NON PROUVÉE');
-    return r;
-  }
-}
-// ==== sonde C4 : fin
