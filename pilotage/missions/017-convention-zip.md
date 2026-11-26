@@ -1,5 +1,27 @@
 # Mission 017 — Convention du zip
 
+## Reprise du 26 novembre 2026 (proposée par l'orchestrateur, à valider par Pascal, porte n° 2)
+
+> Décision de Pascal du 26 novembre 2026 (spec § 11 n° 5) : **page unique « préparer son zip » pour JFC, avec la notice de
+> la 018**. Le texte d'origine plus bas est l'historique ; la convention est aujourd'hui répartie entre spec § 3.1, § 4, § 5
+> et README § 3.
+
+**En une phrase :** Écrire `docs/preparer-son-zip.md`, une page que JFC peut suivre seul : formats acceptés, Shapefile complet,
+système de coordonnées (Lambert 93, GeoJSON sans `crs` lu en WGS84), noms de couches qui donnent les styles du manuel et ceux de
+la bibliothèque (052), plafond de 100 Mo, nom réservé `_cache-onf.zip`, ce qui est refusé et le message que l'agent verra ;
+pour qu'un zip préparé d'après cette page passe tous les contrôles du premier coup.
+
+- **Homme :** `archiviste`, puis `relecteur`. Modèle : sonnet.
+- **Harnais :** écrit `docs/preparer-son-zip.md` et un renvoi depuis le README ; **une source unique** : la page renvoie à la
+  spec pour le détail plutôt que de le recopier, sauf ce dont JFC a besoin pour agir ; aucune règle inventée ; les champs
+  `CODE_*` / `CCOD_*` restent écrits comme provisoires (question à JFC).
+- **Tests :** test de la minute (chaque règle trouvée en moins d'une minute) ; un test vérifie que chaque format, le plafond et
+  le nom réservé cités dans la page sont ceux du code (`plugin/vision-logique.mjs`).
+- **Terrain :** Pascal la lit, puis fabrique un zip d'après elle ; le zip passe sur le Samsung.
+- **Lien avec la 018 (notice de JFC)** : la 018 attend toujours les fichiers bruts de JFC ; cette page part seule et la notice
+  la citera.
+
+
 > Fiche rédigée par Claude (orchestrateur) le 2 novembre 2026 avec `/imperatrice:mission`.
 > **Statut : validée par Pascal le 2 novembre 2026 (porte n° 2).** Une mission = une phrase = une
 > branche = une PR.

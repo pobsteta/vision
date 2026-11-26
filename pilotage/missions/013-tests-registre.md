@@ -1,5 +1,9 @@
 # Mission 013 — Tests du registre complet
 
+> **26 novembre 2026 : fusionnée dans la mission 014 par Pascal** (décision du bilan n° 1, spec § 11 n° 3). Le travail du
+> testeur se fait au premier temps de la 014 (voir sa fiche, « Reprise du 26 novembre 2026 »). Le texte ci-dessous est l'historique.
+
+
 > Fiche rédigée par Claude (orchestrateur) le 2 novembre 2026 avec `/imperatrice:mission`.
 > **Statut : validée par Pascal le 2 novembre 2026 (porte n° 2).** Une mission = une phrase = une
 > branche = une PR.

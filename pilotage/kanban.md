@@ -31,20 +31,25 @@ _Modèle de carte :_
 
 ## Validé
 
-- [013-tests-registre](missions/013-tests-registre.md) · depuis le cycle 0 ; **fusionnée avec la 014 par Pascal le 26 novembre 2026** (le testeur écrit d'abord les tests d'acceptation, puis le dev réalise) ; fiche commune à réécrire
+- [013-tests-registre](missions/013-tests-registre.md) · depuis le cycle 0 ; **fusionnée avec la 014 par Pascal le 26 novembre 2026** (le testeur écrit d'abord les tests d'acceptation, puis le dev réalise) ; fiche reprise le 26 novembre (dans la 014)
   - Homme : `testeur` (sonnet)
   - Mission : Tests du registre complet — cycle prévu 5
   - Moyens : `docs/spec.md` § 3.3, § 9 
-- [014-registre](missions/014-registre.md) · depuis le cycle 0 ; **tranchée par Pascal le 26 novembre 2026** : dossier vide effacé, dossier entier remplacé au réimport (preuve avant code : un plugin sait-il effacer un dossier ? cf. 053) ; fiche à réécrire avec la 013
+- [014-registre](missions/014-registre.md) · depuis le cycle 0 ; **tranchée par Pascal le 26 novembre 2026** : dossier vide effacé, dossier entier remplacé au réimport (preuve avant code : un plugin sait-il effacer un dossier ? cf. 053) ; fiche reprise le 26 novembre, **à valider par Pascal**
   - Homme : `dev` (sonnet)
   - Mission : Registre complet — cycle prévu 6
   - Moyens : `docs/spec.md` § 3.3, ADR 0003
-- [017-convention-zip](missions/017-convention-zip.md) · depuis le cycle 0 ; **tranchée par Pascal le 26 novembre 2026** : page unique « préparer son zip » pour JFC, avec la notice de la 018 ; fiche à reprendre
+- [017-convention-zip](missions/017-convention-zip.md) · depuis le cycle 0 ; **tranchée par Pascal le 26 novembre 2026** : page unique « préparer son zip » pour JFC, avec la notice de la 018 ; fiche reprise le 26 novembre, **à valider par Pascal**
   - Homme : `archiviste` (sonnet)
   - Mission : Convention du zip — cycle prévu 5
   - Moyens : `docs/spec.md` § 3.1, § 4, § 5
 
 ## Planifié
+
+- [055-rappel-hors-ligne](missions/055-rappel-hors-ligne.md) · depuis le cycle 6 · **proposée le 26 novembre 2026, à valider par Pascal** (porte n° 2)
+  - Homme : `dev` (proposition du texte, puis réalisation), puis `relecteur`
+  - Mission : rappeler à l'agent, avant le terrain, de préparer le hors-ligne (fonds IGN, cache ONF de la zone du jour)
+  - Moyens : spec § 3.4, § 3.6, critère 5 de la recette ; texte validé par Pascal avant tout code
 
 
 ## Terminé
