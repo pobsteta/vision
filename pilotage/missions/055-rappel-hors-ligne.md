@@ -1,7 +1,7 @@
 # Mission 055 — Rappel « préparer le hors ligne »
 
 > Fiche rédigée par Claude (orchestrateur) le 26 novembre 2026, sur décision de Pascal du même jour (spec § 11 n° 6 :
-> « oui, texte à valider »). **Statut : proposée, à valider par Pascal (porte n° 2).** Une mission = une phrase = une
+> « oui, texte à valider »). **Statut : validée par Pascal le 26 novembre 2026 (porte n° 2) ; textes validés le même jour.** Une mission = une phrase = une
 > branche = une PR.
 
 ## Mission
@@ -61,3 +61,9 @@ détection du réseau (`isReachable` écarté) ; jamais bloquant (texte dans le 
 ## Comment saura-t-on que ça marche ?
 
 L'agent qui part en forêt après avoir vu le rappel trouve, hors réseau, les fonds et le cache ONF de sa zone.
+
+## Limite connue (relecture du 26 novembre 2026)
+
+Le rappel est calculé à l'ouverture du panneau (une fois par session de QField) et quand le registre change : si QField reste
+ouvert plusieurs jours, la ligne « ancien » n'apparaît qu'à la réouverture du projet. Un cache incomplet (une ou deux couches
+sur trois) est dit « absent ».
