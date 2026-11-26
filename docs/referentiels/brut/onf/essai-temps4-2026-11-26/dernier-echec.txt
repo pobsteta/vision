@@ -1,0 +1,8 @@
+Vision, cache ONF : dernier échec
+Date : 2026-11-26T10:31:21.112Z
+Vision 0.7.0 ; QField v4.3.8
+Étape : préparation
+Message affiché : Zone trop grande (plus de 20 km de côté) : zoomez, puis recommencez.
+contexte.visionId : d98bf4b8-0fac-4dac-85cf-58e6701aceeb
+contexte.dossierProjet : /storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision_2
+contexte.emprise : {"xmin":893721.447403605,"ymin":6661239.896776739,"xmax":904789.6078068974,"ymax":6684961.5009744195}
