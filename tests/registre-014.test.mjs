@@ -6,14 +6,14 @@
 // Deux familles :
 //   R-xx : règles du § 3.3 (un test par règle ; la plupart sont déjà tenues -> verts, c'est dit dans le titre « [déjà tenu ?] »
 //          seulement après exécution : voir le rendu du testeur) ;
-//   D-xx : décisions de Pascal du 26 novembre 2026 : D1 = dossier vide effacé, D2 = dossier entier remplacé au réimport.
-//          Ces tests sont ROUGES ATTENDUS jusqu'au temps 3 de la 014.
+//   D-xx : décisions de Pascal du 26 novembre 2026 : D1 = dossier vide LAISSÉ (variante B : aucun appel d'effacement de dossier,
+//          aucun message), D2 = dossier entier remplacé au réimport, D3 = annexes d'une couche gardée effacées avant sa réécriture.
 //
-// Contrat supposé pour l'effacement d'un DOSSIER (rien n'existe aujourd'hui : spec § 3.3 « aucune fonction d'effacement de dossier
-// exposée »). Le testeur n'invente pas le nom du service : le mock accepte N'IMPORTE QUELLE fonction de platformUtilities autre que
-// rmFile, ou une de ces fonctions de ctx (effacerDossier, supprimerDossier, rmdir, rmDir, removeDir), appelée avec le chemin du
-// dossier (premier argument). Elle se comporte comme QDir::rmdir : elle ne réussit que si le dossier est vide (jamais récursive).
-// Si le dev prouve (temps 2) qu'aucune voie n'existe, ces tests D1 restent rouges et la décision revient à Pascal.
+// Contrat de D1 : le mock enregistre dans appelsDossier TOUT appel à une fonction de platformUtilities autre que rmFile (removeDataset,
+// removeFolder...), à FileUtils.deleteFiles ou à une fonction de dossier de ctx ; D1 exige que cette liste reste vide.
+// (Avant le 26 novembre, le contrat supposait un effacement de dossier à la QDir::rmdir ; la voie réelle, removeDataset, ouvre une
+// boîte de confirmation : écartée par Pascal.)
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -77,7 +77,7 @@ function disqueSimule({ disque = [], dossiersEnPlus = [], rate = [], sansService
   const base = { rmFile: rm };
   const platformUtilities = sansServiceDossier ? base
     : new Proxy(base, { get(t, k) { if (k in t) return t[k]; if (typeof k !== 'string' || k === 'then') return undefined; return rmdir; } });
-  const serviceDossier = sansServiceDossier ? {} : { effacerDossier: rmdir, supprimerDossier: rmdir, rmdir, rmDir: rmdir, removeDir: rmdir };
+  const serviceDossier = sansServiceDossier ? {} : { effacerDossier: rmdir, supprimerDossier: rmdir, rmdir, rmDir: rmdir, removeDir: rmdir, removeFolder: rmdir, removeDataset: rmdir, FileUtils: { deleteFiles: rmdir } };
   const reglages = faussesReglages(registre);
   return {
     fichiersSur, dossiers, journal, appelsFichier, appelsDossier, reglages, rm, rmdir,
@@ -302,67 +302,78 @@ test('R-15 zip abîmé au réimport : les couches gardées sur la carte ne sont 
 });
 
 // =====================================================================================================
-// DÉCISION 1 (26 novembre 2026) : dossier vide effacé
+// DÉCISION 1 (26 novembre 2026, variante B de Pascal) : le dossier vide est LAISSÉ
 // =====================================================================================================
-const R1 = "rouge attendu jusqu'à la mission 014 (D1 : dossier vide effacé)";
+const R1 = "rouge attendu jusqu'à la mission 014 (D1 : dossier vide laissé, aucun appel de dossier)";
+// Un « appel de dossier » est tout appel à une fonction de platformUtilities autre que rmFile (removeDataset, removeFolder, ...),
+// à FileUtils.deleteFiles, ou à une des fonctions de dossier de ctx : le mock les enregistre toutes dans appelsDossier.
+const sansMessageDossier = (message) => assert.ok(!/dossier|\bvide\b|folder|dataset/i.test(message ?? ''), `le plugin se tait sur le dossier : « ${message} »`);
 
-test('D1-01 retrait de la dernière couche d\'un zip : fichiers, copie du zip puis DOSSIER vision-imports/z/ effacés, le dossier en dernier', async () => {
+test('D1-01 retrait de la dernière couche d\'un zip : fichiers et copie du zip effacés, le dossier vision-imports/z/ est LAISSÉ (aucun appel de dossier), aucun message sur le dossier', async () => {
   const w = mondeRetrait({ entrees: [vec('z.zip', 'a')], disque: [...fichiers('z.zip', 'a'), `${COPIES}/z.zip`] });
-  await retire(w);
-  assert.equal(w.dossiers.has(`${COPIES}/z`), false, `le dossier doit avoir disparu : ${R1}`);
-  assert.ok(w.appelsDossier.includes(`${COPIES}/z`));
-  const iDossier = w.journal.findIndex((l) => l === `dossier ${COPIES}/z`);
-  const dernierFichier = Math.max(...w.journal.map((l, i) => (l.startsWith('effacer ') ? i : -1)));
-  assert.ok(iDossier > dernierFichier, `le dossier après le dernier fichier : ${w.journal.join(' | ')}`);
+  const r = await retire(w);
+  for (const f of [...fichiers('z.zip', 'a'), `${COPIES}/z.zip`]) assert.equal(w.fichiersSur.has(f), false, f);
+  assert.deepEqual(w.appelsDossier, [], `aucun appel d'effacement de dossier (ni removeDataset, ni removeFolder, ni FileUtils.deleteFiles) : ${R1}`);
+  assert.equal(w.dossiers.has(`${COPIES}/z`), true, 'le dossier vide est laissé');
+  sansMessageDossier(r.message);
+  assert.ok(!/Fichiers restés/.test(r.message ?? ''), r.message);
 });
 
-test('D1-02 retrait d\'une couche alors que d\'autres restent dans le zip : le dossier reste, aucun appel d\'effacement de dossier', async () => {
+test('D1-02 retrait d\'une couche alors que d\'autres restent dans le zip : le dossier reste, aucun appel de dossier, les autres couches intactes', async () => {
   const w = mondeRetrait({ entrees: [vec('z.zip', 'a'), vec('z.zip', 'b')], disque: [...fichiers('z.zip', 'a'), ...fichiers('z.zip', 'b')] });
   await retire(w);
   assert.equal(w.dossiers.has(`${COPIES}/z`), true);
-  assert.deepEqual(w.appelsDossier.filter((c) => c === `${COPIES}/z`), [], `${R1} : le dossier encore utilisé n'est pas visé`);
+  assert.deepEqual(w.appelsDossier, [], R1);
   for (const f of fichiers('z.zip', 'b')) assert.equal(w.fichiersSur.has(f), true, f);
 });
 
-test('D1-03 le dossier n\'est effacé qu\'après que ses fichiers ont réellement disparu : un fichier qui résiste garde le dossier, son nom est dit', async () => {
+test('D1-03 un fichier résiste à l\'effacement : son nom est dit comme avant (031), aucun appel de dossier, aucun message sur le dossier', async () => {
   const [g] = fichiers('z.zip', 'a');
   const w = mondeRetrait({ entrees: [vec('z.zip', 'a')], disque: fichiers('z.zip', 'a'), rate: [g] });
   const r = await retire(w);
   assert.equal(w.dossiers.has(`${COPIES}/z`), true);
   assert.equal(w.fichiersSur.has(g), true);
   assert.match(r.message, /Fichiers restés sur l'appareil : a\.gpkg\./);
-  assert.ok(!w.appelsDossier.includes(`${COPIES}/z`), `un dossier non vide n'est pas visé : ${R1}`);
+  assert.deepEqual(w.appelsDossier, [], R1);
+  sansMessageDossier(r.message.replace(/Fichiers restés sur l'appareil : a\.gpkg\./, ''));
 });
 
-test('D1-04 un fichier étranger dans le dossier (non posé par Vision) n\'est jamais effacé, et le dossier reste (rmdir non récursif)', async () => {
+test('D1-04 un fichier étranger dans le dossier (non posé par Vision) n\'est jamais effacé ; aucun appel de dossier', async () => {
   const etranger = `${COPIES}/z/notes-jfc.txt`;
   const w = mondeRetrait({ entrees: [vec('z.zip', 'a')], disque: [...fichiers('z.zip', 'a'), etranger] });
   await retire(w);
   assert.equal(w.fichiersSur.has(etranger), true);
   assert.ok(!w.appelsFichier.includes(etranger));
+  assert.deepEqual(w.appelsDossier, [], R1);
   assert.equal(w.dossiers.has(`${COPIES}/z`), true);
-  for (const f of fichiers('z.zip', 'a')) assert.equal(w.fichiersSur.has(f), false, `${f} : ${R1}`);
+  for (const f of fichiers('z.zip', 'a')) assert.equal(w.fichiersSur.has(f), false, f);
 });
 
-test('D1-05 réimport où plus aucune couche n\'est acceptée : leurs fichiers puis le dossier du zip sont effacés', async () => {
+test('D1-05 réimport où plus aucune couche n\'est acceptée : leurs fichiers sont effacés, le dossier est LAISSÉ (aucun appel de dossier), aucun message sur le dossier', async () => {
   const w = mondeImport();
   await importe(w);
   assert.equal(w.dossiers.has(D_DEUX), true);
-  await importe(w, { controlerCouche: () => REFUS });
+  const avant = w.appelsDossier.length;
+  const r = await importe(w, { controlerCouche: () => REFUS });
   const m = await M();
   assert.deepEqual(couchesDe(m, w.reglages, 'deux.zip'), []);
-  assert.equal(w.dossiers.has(D_DEUX), false, `dossier vide effacé au réimport : ${R1}`);
+  for (const c of ['a', 'b']) for (const f of fichiers('deux.zip', c)) assert.equal(w.fichiersSur.has(f), false, f);
+  assert.equal(w.appelsDossier.length, avant);
+  assert.deepEqual(w.appelsDossier, [], R1);
+  assert.equal(w.dossiers.has(D_DEUX), true, 'le dossier vide est laissé');
+  // Le message du refus (contrôle) reste dit ; il ne parle pas du dossier.
+  sansMessageDossier(String(r.message ?? '').replace(REFUS.message, ''));
 });
 
-test('D1-06 réimport où il reste des couches : le dossier reste', async () => {
+test('D1-06 réimport où il reste des couches : le dossier reste, aucun appel de dossier', async () => {
   const w = mondeImport();
   await importe(w);
   await importe(w, { octets: zipDe('a.geojson') });
   assert.equal(w.dossiers.has(D_DEUX), true);
-  assert.deepEqual(w.appelsDossier.filter((c) => c === D_DEUX), [], `${R1}: dossier non vide non visé`);
+  assert.deepEqual(w.appelsDossier, [], R1);
 });
 
-test('D1-07 gardes : chemin de dossier jamais hors vision-imports/<nom simple>, jamais vision-imports/ lui-même, jamais le dossier du projet', async () => {
+test('D1-07 gardes (réécrit) : même avec un registre ou un chemin de projet trafiqué, jamais d\'appel de dossier (l\'ancienne garde « chemin de dossier visé » n\'a plus d\'objet) ; fichiers effacés seulement sous vision-imports/<nom>/', async () => {
   for (const [entrees, extra] of [
     [[vec('z.zip', 'a')], {}],
     [[vec('z.zip', 'a', { chemin: '../../vision.qgz' })], {}],
@@ -371,35 +382,35 @@ test('D1-07 gardes : chemin de dossier jamais hors vision-imports/<nom simple>, 
   ]) {
     const w = mondeRetrait({ entrees, disque: [...fichiers('z.zip', 'a'), `${PROJET}/vision.qgz`] });
     await retire(w, extra);
-    for (const c of w.appelsDossier) {
-      assert.ok(c.startsWith(COPIES + '/') && !c.slice(COPIES.length + 1).includes('/') && !c.split('/').some((s) => s === '..' || s === '.'), `dossier visé hors de vision-imports/<nom> : ${c}`);
-      assert.ok(!c.includes('_cache-onf'), c);
-    }
-    assert.ok(!w.appelsDossier.includes(COPIES) && !w.appelsDossier.includes(PROJET));
+    assert.deepEqual(w.appelsDossier, [], R1);
+    for (const c of w.appelsFichier) assert.ok((c.startsWith(COPIES + '/z/') || c === COPIES + '/z.zip') && !c.includes('..') && !c.includes('_cache-onf'), c);
+    assert.equal(w.fichiersSur.has(`${PROJET}/vision.qgz`), true);
   }
   for (const dossierProjet of ['', '/', 'relatif', undefined]) {
     const w = mondeRetrait({ entrees: [vec('z.zip', 'a')], disque: fichiers('z.zip', 'a') });
     await retire(w, { dossierProjet });
     assert.deepEqual(w.appelsDossier, [], JSON.stringify(dossierProjet));
+    assert.deepEqual(w.appelsFichier, [], `dossier de projet invalide : rien d'effacé : ${JSON.stringify(dossierProjet)}`);
   }
 });
 
-test('D1-08 variante « dossier vide laissé » : si aucun moyen d\'effacer un dossier n\'est fourni, le retrait réussit quand même (pas d\'exception, fichiers effacés, registre à jour)', async () => {
+test('D1-08 aucun service de dossier fourni (le cas réel, variante B) : le retrait réussit (pas d\'exception, fichiers effacés, registre à jour)', async () => {
   const m = await M();
   const w = mondeRetrait({ entrees: [vec('z.zip', 'a'), vec('y.zip', 'b')], disque: [...fichiers('z.zip', 'a'), `${COPIES}/z.zip`], sansServiceDossier: true });
-  await retire(w);
+  const r = await retire(w);
   for (const f of fichiers('z.zip', 'a')) assert.equal(w.fichiersSur.has(f), false, f);
   assert.deepEqual(m.lireRegistre(w.reglages, ID).map((x) => x.zip), ['y.zip']);
+  sansMessageDossier(r.message);
 });
 
-test('D1-09 un autre zip : son dossier, vide ou non, n\'est pas touché par le retrait d\'une couche de z.zip', async () => {
+test('D1-09 un autre zip : son dossier, vide ou non, n\'est pas touché par le retrait d\'une couche de z.zip ; aucun appel de dossier', async () => {
   const w = mondeRetrait({ entrees: [vec('z.zip', 'a'), vec('y.zip', 'b')], disque: [...fichiers('z.zip', 'a'), ...fichiers('y.zip', 'b')], dossiersEnPlus: [`${COPIES}/vide`] });
   await retire(w);
   assert.equal(w.dossiers.has(`${COPIES}/y`), true);
   assert.equal(w.dossiers.has(`${COPIES}/vide`), true);
-  assert.deepEqual(w.appelsDossier.filter((c) => c !== `${COPIES}/z`), []);
+  assert.deepEqual(w.appelsDossier, [], R1);
 });
-
+// =====================================================================================================
 // =====================================================================================================
 // DÉCISION 2 (26 novembre 2026) : dossier entier remplacé au réimport
 // =====================================================================================================
@@ -442,4 +453,51 @@ test('D2-04 réimport : le remplacement ne sort pas de vision-imports/<zip>/ (au
   for (const c of [...w.appelsFichier, ...w.appelsDossier]) assert.ok(c.startsWith(D_DEUX), c);
   assert.equal(w.fichiersSur.has(`${PROJET}/vision.qgz`), true);
   assert.equal(w.fichiersSur.has(`${PROJET}/saisie.gpkg`), true);
+});
+
+// =====================================================================================================
+// DÉCISION 3 (26 novembre 2026) : annexes d'une couche GARDÉE effacées avant sa réécriture, son .gpkg jamais
+// =====================================================================================================
+const R3 = "rouge attendu jusqu'à la mission 014 (D3 : annexes de la couche gardée effacées avant la réécriture)";
+const ANNEXES = ['.gpkg-wal', '.gpkg-shm', '.gpkg.aux.xml'];
+
+test('D3-01 réimport : les annexes -wal, -shm et .aux.xml de la couche gardée sont effacées AVANT la réécriture de son .gpkg, et son .gpkg n\'est jamais effacé', async () => {
+  const w = mondeImport();
+  await importe(w);
+  const annexes = ANNEXES.map((s) => `${D_DEUX}/a${s}`);
+  for (const f of annexes) w.fichiersSur.add(f);
+  w.journal.length = 0; w.appelsFichier.length = 0;
+  await importe(w, { octets: zipDe('a.geojson') });
+  const iEcr = w.journal.indexOf(`reecrire ${D_DEUX}/a.gpkg`);
+  assert.ok(iEcr >= 0, `a est réécrite : ${w.journal.join(' | ')}`);
+  for (const f of annexes) {
+    const iEff = w.journal.indexOf(`effacer ${f}`);
+    assert.ok(iEff >= 0 && iEff < iEcr, `${f} : effacement (${iEff}) avant réécriture (${iEcr}) : ${R3} : ${w.journal.join(' | ')}`);
+    assert.equal(w.fichiersSur.has(f), false, f);
+  }
+  assert.ok(!w.appelsFichier.includes(`${D_DEUX}/a.gpkg`), `le .gpkg de la couche gardée n'est jamais effacé : ${w.appelsFichier.join(', ')}`);
+  assert.equal(w.fichiersSur.has(`${D_DEUX}/a.gpkg`), true);
+  assert.deepEqual(w.appelsDossier, []);
+});
+
+test('D3-02 réimport : seules les annexes de la couche gardée, dans le dossier du zip, sont visées (annexe d\'un autre zip, .gpkg du même nom ailleurs, cache ONF : intacts)', async () => {
+  const w = mondeImport();
+  await importe(w);
+  const autres = [...ANNEXES.map((s) => `${COPIES}/y/a${s}`), `${COPIES}/y/a.gpkg`, `${COPIES}/_cache-onf/actuel/a.gpkg-wal`];
+  for (const f of [...ANNEXES.map((s) => `${D_DEUX}/a${s}`), ...autres]) w.fichiersSur.add(f);
+  w.journal.length = 0; w.appelsFichier.length = 0;
+  await importe(w, { octets: zipDe('a.geojson') });
+  for (const f of autres) { assert.equal(w.fichiersSur.has(f), true, f); assert.ok(!w.appelsFichier.includes(f), f); }
+  for (const f of ANNEXES.map((s) => `${D_DEUX}/a${s}`)) assert.equal(w.fichiersSur.has(f), false, `${f} : ${R3}`);
+});
+
+test('D3-03 réimport sans annexe sur le disque : le .gpkg n\'est pas effacé, la couche est réécrite et reste au registre', async () => {
+  const m = await M();
+  const w = mondeImport();
+  await importe(w);
+  w.journal.length = 0; w.appelsFichier.length = 0;
+  await importe(w, { octets: zipDe('a.geojson') });
+  assert.ok(!w.appelsFichier.includes(`${D_DEUX}/a.gpkg`));
+  assert.ok(w.journal.includes(`reecrire ${D_DEUX}/a.gpkg`));
+  assert.deepEqual(couchesDe(m, w.reglages, 'deux.zip'), ['a']);
 });
