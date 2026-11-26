@@ -4,6 +4,13 @@
 > ajouter ce service WFS au projet vision avec les couches Forêt, parcelles et point de rencontre en
 > prenant comme style les styles joints »). **Statut : validée par Pascal le 25 novembre 2026** (« je valide »).
 >
+> **Statut au 26 novembre 2026 (archiviste)** : étapes 1 à 3 faites, essai Samsung réussi (étape 3, temps 3 : tests 1 à 6 ; temps 4 : points A et B ;
+> point C non fait), documentation écrite (ADR 0010 amendée, spec § 3.3, § 3.6, § 11, README, notes de release) ; **reste** : retrait du déclencheur
+> temporaire de `release-plugin.yml`, relecture finale, PR vers `main` (Pascal). Le titre de la fiche (« WFS ») est historique : le WFS est retiré de
+> `vision.qgz` (arbitrage du 26 novembre 2026). **Pièces** : `docs/referentiels/brut/onf/` (service, styles, sondes, mesure),
+> `docs/referentiels/brut/onf/essai-c4-2026-11-26/` et `docs/referentiels/brut/onf/essai-temps4-2026-11-26/` (essais Samsung),
+> `docs/referentiels/cache-zone-qfield.md` §§ 14, 15, 15 bis (preuves).
+>
 > **Changement de cap** : le bilan n° 1 (5 novembre 2026) suspendait les nouvelles fonctions jusqu'aux
 > résultats de recette ; Pascal lève cette pause pour ce sujet en le demandant (journal du 25 novembre).
 

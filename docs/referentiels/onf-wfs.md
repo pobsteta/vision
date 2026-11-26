@@ -1,7 +1,7 @@
 # Référentiel du service WFS de l'ONF (forêts, parcelles, points de rencontre des secours)
 
 - **Propriétaire :** Pascal Obstétar. Mission 053, étape 1 (mesure avant code).
-- **Décision éclairée :** quelles couches ONF mettre dans `vision.qgz`, sous quelle forme (copie locale, WFS, ou les deux) et avec quel poids. **Tranchée le 25 novembre 2026 par Pascal : ADR [0010](../adr/0010-couches-onf-wfs-et-cache-de-zone.md)** (WFS en ligne et cache de zone sur le mobile ; copie nationale écartée). Spec : § 3.6.
+- **Décision éclairée :** quelles couches ONF mettre dans `vision.qgz`, sous quelle forme (copie locale, WFS, ou les deux) et avec quel poids. **Tranchée le 25 novembre 2026 par Pascal : ADR [0010](../adr/0010-couches-onf-wfs-et-cache-de-zone.md)** (WFS en ligne et cache de zone sur le mobile ; copie nationale écartée) ; **amendée le 26 novembre 2026 : le WFS est retiré de `vision.qgz`, le cache est la seule source ONF du projet (groupe « ONF Cache »)**. Spec : § 3.6.
 - **Sources :** `brut/onf/onf-forets-getcapabilities-2026-11-25.xml` (GetCapabilities enregistré par Pascal le 25 novembre 2026) et les trois styles de Pascal (`brut/onf/*.qml`). Mesure n° 1 : `brut/onf/mesure-2026-11-25.md` (section 3). Essais de la sonde sur le Samsung : `brut/onf/sonde-*.jpg` et `cache-zone-qfield.md` §§ 8-9.
 - **Limites :** le service ne répond qu'en http et n'est pas joignable depuis la session cloud de l'équipe ; la mesure se fait dans GitHub Actions. *Mise à jour du 25 novembre 2026 (archiviste) : la mesure n° 1 a tourné ; les sections 3 à 5 sont remplies. Le texte de la section 1 est conservé tel qu'écrit avant la mesure ; ses doutes sont levés dans la section 3.*
 
@@ -75,13 +75,13 @@ Fiches (MetadataURL du GetCapabilities, en http, page JavaScript de GeoNetwork) 
 
 - Le GetCapabilities dit « Aucune condition ne s'applique » (`Fees`) et « Aucun obstacle technique » (`AccessConstraints`) ; titre « Données publiques de l'ONF en Métropole ». C'est une déclaration du service, pas une licence.
 - **Accord de l'ONF pour cet usage** (les trois couches et leur cache sur le mobile) : **rapporté par Pascal le 25 novembre 2026** (« J'ai l'accord de l'ONF »), **sans pièce écrite** : « Laisse tomber la trace écrite onf pas besoin » (Pascal, même jour, décision consignée au journal). Rien n'est vérifiable dans le dépôt ; si l'accord est un jour contesté, la preuve manque.
-- **Mention à afficher** : « © ONF », validée par Pascal le 25 novembre 2026. Posée dans le **nom** des trois couches du cache (le plugin ne peut pas écrire les droits d'une couche, `cache-zone-qfield.md` § 12) et dans l'attribution des couches WFS de `vision.qgz`.
+- **Mention à afficher** : « © ONF », validée par Pascal le 25 novembre 2026. Posée dans le **nom** des trois couches du cache (le plugin ne peut pas écrire les droits d'une couche, `cache-zone-qfield.md` § 12) et dans `<rights>` des couches du groupe « ONF Cache » de `vision.qgz` (les couches WFS du projet n'existent plus depuis le 26 novembre 2026).
 - **Droit de redistribuer une copie dans un zip** : non lu, non demandé. Le cache est fait **sur l'appareil de l'agent** depuis le service, aucune donnée de l'ONF n'est dans le dépôt ni dans une release.
 
 ## 5. Ce qui reste inconnu après la mesure
 
 - Texte exact de la licence des fiches de métadonnées (voir section 4).
-- Affichage des trois couches WFS de `vision.qgz` (fournisseur WFS de QGIS) dans QField 4.3.8 sur Android, avec réseau : jamais essayé (`cache-zone-qfield.md` § 13.1).
+- ~~Affichage des trois couches WFS de `vision.qgz` (fournisseur WFS de QGIS) dans QField 4.3.8 sur Android, avec réseau : jamais essayé (`cache-zone-qfield.md` § 13.1).~~ Sans objet depuis le 26 novembre 2026 : couches WFS retirées de `vision.qgz` (hors réseau elles donnaient la page « Impossible de charger certaines couches »).
 - Présence et affichage de `arrows/Arrow_01.svg` dans QField Android.
 - Tenue d'une zone proche des plafonds du cache (20 km de côté, 5 000 objets par couche) sur l'appareil.
 - Date de mise à jour des données de l'ONF et rythme conseillé du cache : non connus ; le cache porte sa date (« zone du JJ/MM/AAAA »), c'est à l'agent de le refaire quand il le juge utile.

@@ -838,3 +838,5 @@ Essai (tests 1 à 6 réussis, `docs/referentiels/brut/onf/essai-c4-2026-11-26/`)
   `::QFieldLayerTreeState`) ; ce qui n'y figure pas (les nouveaux groupes) est décoché. La cause n'est donc pas dans notre `vision.qgz`, qui déclare bien les
   groupes cochés. Un projet neuf n'est pas touché. Pas de correction possible côté `.qgz` ; le plugin ne peut pas cocher un groupe (arbre non exposé) :
   consigne à l'agent (cocher « ONF Cache » après une mise à jour du `vision.qgz`), à écrire par l'archiviste.
+
+**Note de l'archiviste, 26 novembre 2026** : la consigne d'ordre de mise à jour (§ 15) et la consigne « cocher ONF Cache » (§ 15 bis) sont écrites dans le README (section « Les couches de l'ONF »), `docs/spec.md` § 3.6 et les notes de `release-projet-modele.yml`.

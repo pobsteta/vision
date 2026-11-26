@@ -163,18 +163,32 @@ Couleurs, épaisseurs et tailles de police : [`docs/spec.md`](docs/spec.md) § 5
 
 ### Les couches de l'ONF (forêts, parcelles, points de secours)
 
-*Mission 053, 25 novembre 2026 ; plugin 0.7.0. Le détail et les décisions : [`docs/spec.md`](docs/spec.md) § 3.6 et [ADR 0010](docs/adr/0010-couches-onf-wfs-et-cache-de-zone.md).*
+*Mission 053, 25 et 26 novembre 2026 ; plugin 0.7.0. Le détail et les décisions : [`docs/spec.md`](docs/spec.md) § 3.6 et [ADR 0010](docs/adr/0010-couches-onf-wfs-et-cache-de-zone.md) (amendée le 26 novembre 2026).*
 
-`vision.qgz` contient un groupe **« ONF »** (sous « Saisie terrain », au-dessus des fonds de carte) avec trois couches du service public de l'ONF, aux styles fournis par Pascal : « Forêts publiques (© ONF) », « Parcelles forestières (© ONF) », « Points de secours (© ONF) ».
+`vision.qgz` contient un groupe **« ONF Cache »** (sous « Saisie terrain », au-dessus des fonds de carte) avec trois couches du service public de l'ONF, aux styles fournis par Pascal : « Forêts publiques (© ONF) », « Parcelles forestières (© ONF) », « Points de secours (© ONF) ». **Il n'y a plus de couche en ligne (WFS) dans le projet** : ces trois couches se remplissent par le **cache**, que tu fais avec réseau avant de partir.
 
-- **En ligne** : les trois couches se chargent **avec du réseau**, sur la zone affichée. Les parcelles et les points de secours n'apparaissent qu'en zoomant (en deçà du 1:50 000), les forêts en deçà du 1:250 000.
-- **Sans réseau : il faut préparer la zone avant de partir.** Avec réseau, cadre ta zone du jour, touche le bouton Vision, puis **« Mettre en cache les couches ONF de cette zone »**. Le plugin enregistre sur le téléphone les trois couches de cette zone ; elles reviennent à chaque ouverture du projet, même en mode avion. Le panneau affiche « Cache ONF du JJ/MM/AAAA : … » (les nombres d'objets).
+- **Prépare ta zone avant de partir.** Avec réseau, cadre ta zone du jour, touche le bouton Vision, puis **« Mettre en cache les couches ONF de cette zone »**. Le plugin enregistre sur le téléphone les trois couches de cette zone ; elles s'affichent dans le groupe « ONF Cache » et reviennent à chaque ouverture du projet, même en mode avion. Le panneau affiche « Cache ONF du JJ/MM/AAAA : … » (les nombres d'objets). Tant que le cache n'est pas fait, le groupe est vide.
+- **Zoom** : les parcelles et les points de secours n'apparaissent qu'en zoomant (en deçà du 1:50 000) ; les forêts sont visibles à toutes les échelles.
 - **Une zone de 20 km de côté au plus** (et 5 000 objets par couche au plus) : au-delà, le plugin refuse et demande de zoomer.
-- **Une seule zone à la fois** : un nouveau cache remplace l'ancien, mais seulement s'il réussit en entier ; sinon l'ancien est gardé et un message le dit.
-- **Le cache s'affiche en tête de liste**, hors du groupe « ONF » (un plugin ne peut pas ranger une couche dans un groupe). **Quand le cache existe, tu as donc deux couches de même nom** (celle du cache, en tête, et celle du groupe « ONF ») : en mode avion, seul le cache affiche quelque chose. Ces couches sont en lecture seule.
-- **Un zip nommé `_cache-onf.zip` est refusé** : nom réservé par Vision.
+- **Une seule zone à la fois** : un nouveau cache remplace l'ancien, mais seulement s'il réussit en entier ; sinon l'ancien est gardé et un message le dit. Si le message est « Cache ONF prêt : fermez puis rouvrez le projet pour l'afficher. », ferme puis rouvre le projet.
+- **Ces couches sont en lecture seule.** Un zip nommé `_cache-onf.zip` est refusé : nom réservé par Vision.
 - **Le service de l'ONF n'est joignable qu'en http** (pas de https) : c'est normal, et ses données sont publiques. Aucune clé n'est nécessaire.
-- **Pas encore prouvé sur le téléphone** : l'affichage des couches WFS du groupe « ONF » avec réseau, les flèches des points de secours, une zone proche des plafonds. Le cache a été essayé en ligne puis hors ligne par Pascal (25 novembre 2026).
+
+**Mettre à jour un appareil déjà en service** (il a déjà un projet Vision et, peut-être, un cache de l'ancienne version). **Respecte cet ordre** :
+
+1. **Mets à jour le plugin** d'abord.
+2. **Ouvre le projet une fois** (le plugin prépare les trois fichiers vides du cache).
+3. **Copie le nouveau `vision.qgz`** (câble USB, en remplaçant l'ancien : voir les notes de la release « Projet modèle Vision »).
+4. **Rouvre le projet, puis coche « ONF Cache » dans la légende.** QField réapplique l'ancien état de la légende (il garde l'état de chaque projet) : le nouveau groupe arrive décoché. Ton ancien cache est repris dans « ONF Cache » à cette ouverture.
+
+Dans un autre ordre (nouveau `vision.qgz` avant le plugin), la page « Impossible de charger certaines couches » s'affiche une fois et les couches ONF restent vides jusqu'à la réouverture du projet.
+
+**Limites connues** (acceptées par Pascal) :
+
+- Chaque cache laisse sur le téléphone un dossier vide dans `vision-imports/_cache-onf/` : sans conséquence, sans moyen de l'effacer depuis Vision.
+- Avec l'**ancien** `vision.qgz` (avant la copie du nouveau), le cache s'affiche en tête de liste et peut perdre ses couleurs ; la copie du nouveau `vision.qgz` règle cela.
+- **Un seul projet Vision par appareil** : deux projets Vision sur le même téléphone partagent la liste des couches ajoutées et le cache (le cache de l'un remplace celui de l'autre). Si tu en as essayé plusieurs, garde-en un.
+- Pas encore prouvé sur le téléphone : les flèches des points de secours, une zone proche des plafonds.
 - Source et mesures du service : [`docs/referentiels/onf-wfs.md`](docs/referentiels/onf-wfs.md).
 
 ### Systèmes de coordonnées
@@ -248,7 +262,7 @@ Un zip de démonstration (données fictives, aux noms du manuel : UG, Parcelles,
 | Géoplateforme IGN (`data.geopf.fr`) | Plan IGN v2, BD ORTHO, cadastre (XYZ, sans clé) | [`docs/referentiels/fonds-ign.md`](docs/referentiels/fonds-ign.md), [`docs/referentiels/fonds-osm-cadastre.md`](docs/referentiels/fonds-osm-cadastre.md) |
 | OpenStreetMap (`tile.openstreetmap.org`) | fond en ligne seulement (politique de l'OSMF) | [`docs/referentiels/fonds-osm-cadastre.md`](docs/referentiels/fonds-osm-cadastre.md), [spec § 3.4](docs/spec.md) |
 | OpenTopoMap (`tile.opentopomap.org`) | fond en ligne seulement | idem |
-| ONF (`ws.carmencarto.fr`, WFS en http, sans clé) | forêts publiques, parcelles forestières, points de rencontre des secours (groupe « ONF » et cache de zone) | [`docs/referentiels/onf-wfs.md`](docs/referentiels/onf-wfs.md), [spec § 3.6](docs/spec.md), [ADR 0010](docs/adr/0010-couches-onf-wfs-et-cache-de-zone.md) |
+| ONF (`ws.carmencarto.fr`, WFS en http, sans clé) | forêts publiques, parcelles forestières, points de rencontre des secours (cache de zone, groupe « ONF Cache ») | [`docs/referentiels/onf-wfs.md`](docs/referentiels/onf-wfs.md), [spec § 3.6](docs/spec.md), [ADR 0010](docs/adr/0010-couches-onf-wfs-et-cache-de-zone.md) |
 | GitHub (dépôt `pobsteta/vision`, Releases, Actions) | code, publication des zips et flashcodes | workflows ci-dessus |
 
 SCAN 25 : pas branché (licence et clé de l'ONF à confirmer par JFC ; aucune clé dans le dépôt). Les couches WFS publiques de l'ONF (ci-dessus) n'ont rien à voir avec le SCAN 25.

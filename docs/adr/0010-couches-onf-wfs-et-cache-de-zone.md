@@ -2,6 +2,7 @@
 
 - **Date :** 2026-11-25
 - **Statut :** **acceptée par Pascal le 25 novembre 2026** (« je valide le reste »)
+- **Amendée le 26 novembre 2026** (WFS retiré, groupe « ONF Cache ») : voir l'amendement en fin de page, qui prévaut.
 - **Proposée par :** Claude (orchestrateur)
 - **Tranchée par :** Pascal
 - **Mission :** 053 (`pilotage/missions/053-couches-onf-wfs.md`)
@@ -84,3 +85,43 @@ style à côté), et qui revient à chaque réouverture.
 
 - Affichage des couches WFS de `vision.qgz` dans QField 4.3.8 sur le Samsung, avec réseau.
 - Tenue d'une zone proche des plafonds (20 km, 5 000 objets) sur l'appareil.
+
+## Amendement du 26 novembre 2026 : groupe « ONF Cache » (voie C4) et retrait du WFS
+
+> Ajout daté (règle du sommier) : le texte ci-dessus n'est pas modifié ; il dit ce qui a été décidé le 25 novembre 2026.
+> **Là où il se contredit avec cet amendement, l'amendement prévaut.** Décisions de Pascal du 25 et du 26 novembre 2026 (journal),
+> mission 053, étape 3. Preuves : `docs/referentiels/cache-zone-qfield.md` §§ 14, 15 et 15 bis.
+
+**Ce qui change**
+
+1. **Le WFS est retiré de `vision.qgz`** (Pascal, 26 novembre 2026). Raison : à l'essai du temps 3 sur le Samsung, en mode avion, l'ouverture du
+   projet affichait la page « Impossible de charger certaines couches » nommant les trois couches WFS (test 3). Le cache, fait avec réseau, est la
+   **seule source ONF du projet**. Le point 1 de « Ce qui est décidé » (couches WFS en ligne, seuil du 1:250 000) ne vaut plus ; la version WFS
+   1.0.0 reste celle des requêtes du cache. Un agent doit donc mettre sa zone en cache, avec réseau, pour voir l'ONF. Le plugin n'a jamais dépendu des
+   couches WFS du projet. Un ancien `vision.qgz` garde son groupe « ONF » WFS tant qu'il n'est pas remplacé.
+2. **Groupe « ONF Cache » (voie C4, voie 1 du § 14 de la pièce)** : `vision.qgz` porte un groupe « ONF Cache » avec trois couches à **chemin fixe**
+   `vision-imports/_cache-onf/actuel/<couche>.gpkg` (mêmes noms « … (© ONF) », styles adaptés, lecture seule). Le plugin remplit ces fichiers par
+   **bascule par renommage** (actuel mis de côté, nouveau à sa place, `reload()`, contrôle de ce qui s'affiche, renommages inverses au moindre écart :
+   le tout ou rien est gardé). Cela remplace « couches en tête de liste » et lève la valeur sacrifiée « le rangement » ; l'option écartée « cache rangé
+   dans le groupe (voie C4) » est **prouvée** (sonde du 25 novembre, essais 1 à 6 du 26 novembre).
+3. **GeoPackage vides** : livrés dans `projet-vision.zip` (première installation) seulement, jamais dans la mise à jour ; créés par le plugin à
+   l'ouverture de tout projet Vision s'ils manquent. **Mode ancien gardé** (ancien `vision.qgz` : cache en tête de liste, comme avant). **Migration**
+   d'un cache en génération vers `actuel/` à la première ouverture du nouveau projet. **Reprise après un retour arrière incomplet** : sauvegardes
+   `.avant.gpkg` remises à `actuel/` à l'ouverture suivante.
+4. **Seuils** : forêts du cache visibles à toutes les échelles (Pascal, 26 novembre 2026) ; parcelles et points en deçà du 1:50 000.
+5. **Texte validé** (fiche 053) « Cache ONF prêt : fermez puis rouvrez le projet pour l'afficher. », quand une couche du projet était invalide au
+   moment du bouton.
+6. **Consigne de mise à jour d'un appareil en service** : plugin d'abord, ouvrir le projet une fois, puis copier le nouveau `vision.qgz`, puis cocher
+   « ONF Cache » dans la légende (QField réapplique l'ancien état de la légende, `QfProjectInfo`, QField 4.3.8). Dans l'autre ordre : page d'erreur
+   une fois, couches invalides jusqu'à la réouverture.
+
+**Limites acceptées par Pascal (26 novembre 2026)** : un dossier de génération vide laissé par chaque cache ; styles absents du cache **en mode
+ancien**, transitoires (réparés par la copie du nouveau `vision.qgz`, aucune recherche de plus) ; groupe décoché après mise à jour (consigne, aucun
+code). **Constatée à l'essai, non tranchée** : le registre est partagé entre plusieurs projets Vision d'un même appareil (même `vision_id`), ce qui
+contredit la règle « un seul `vision.qgz` par appareil » (spec § 3.3) : le cache d'un projet remplace celui d'un autre dans le registre.
+
+**Valeurs sacrifiées, mises à jour** : « le rangement » n'est plus sacrifié ; s'ajoutent le WFS en ligne (retiré) et la propreté du dossier du cache
+(dossiers de génération vides). **Reste à prouver** : le `.qml` voisin en mode ancien (point C du temps 4, non fait) et la tenue d'une zone proche
+des plafonds ; l'essai des couches WFS du projet n'a plus d'objet.
+
+**Pièces** : `docs/referentiels/brut/onf/essai-c4-2026-11-26/` (tests 1 à 6), `docs/referentiels/brut/onf/essai-temps4-2026-11-26/` (points A et B).
