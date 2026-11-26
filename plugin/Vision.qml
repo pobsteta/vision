@@ -630,7 +630,7 @@ Item {
   }
 
   function mettreEnCacheOnf() {
-    if (cacheEnCours) return;
+    if (cacheEnCours || viderEnCours) return;
     let prep = null;
     try {
       let emprise = null;
@@ -757,5 +757,46 @@ Item {
       styles: StylesOnf.STYLES_ONF
     }, servicesCache()));
   }
+
+  // ==== vider le cache ONF (mission 054 ; docs/referentiels/vider-cache-onf.md ; textes validés par Pascal le 26 novembre 2026)
+  // Mode groupe : GeoPackage vides à actuel/ par la bascule, couches du groupe jamais retirées. Mode ancien : removeMapLayer
+  // (retirerCacheDeLaCarte), jamais deleteLater (inopérant sous Qt 6.10). Aucun texte pendant le vidage : le bouton est grisé.
+  property bool viderEnCours: false
+  readonly property var textesVider: Logique.TEXTES_VIDER_CACHE_ONF
+  readonly property int delaiConfirmationVider: Logique.VIDER_CONFIRMATION_DELAI_MS
+
+  // Le bouton « Vider le cache ONF » n'existe que si un cache ONF complet est inscrit.
+  function viderCacheVisible() {
+    const id = visionId();
+    return id ? Logique.viderCacheVisible(Logique.lireRegistre(reglages, id)) : false;
+  }
+
+  function viderCacheOnf() {
+    if (viderEnCours || cacheEnCours) return;
+    viderEnCours = true;
+    // Qt.callLater : le bouton est grisé à l'écran avant que le geste (synchrone) ne commence.
+    Qt.callLater(function () {
+      let r = null;
+      try {
+        r = Logique.viderCacheOnf(Object.assign({
+          visionId: visionId(),
+          dossierProjet: dossierProjet(),
+          reglages: reglages,
+          horodatage: Logique.cacheHorodatage(new Date()),
+          date: new Date()
+        }, servicesCache()));
+      } catch (e) {
+        r = { ok: false, message: Logique.TEXTES_VIDER_CACHE_ONF.echec, etape: "exception", raison: Logique.texteException(e) };
+      }
+      try {
+        if (!r.ok) cacheDiagnostic({ etape: "vider : " + r.etape, raison: r.raison, message: r.message, contexte: contexteCache(null), details: r.details });
+      } catch (e) { /* le diagnostic ne gêne jamais */ }
+      viderEnCours = false;
+      message(r.message);
+      registreChange();
+    });
+  }
+  // ==== vider le cache ONF : fin
+
   // ==== cache ONF : fin
 }
