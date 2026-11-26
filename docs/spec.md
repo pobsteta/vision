@@ -306,6 +306,27 @@ autres sont décochés. Le **cadastre est au-dessus de tous les fonds** et visib
     en génération est basculé vers `actuel/` (essai 6c, réussi).
   - **Réouverture** : le cache revient sans réseau, depuis `actuel/` et le registre. La ligne « Cache ONF du JJ/MM/AAAA : … » du panneau donne la date et
     les nombres. Une couche du cache illisible : texte validé, le cache n'est pas affiché ; le refaire avec réseau.
+- **Vider le cache ONF (mission 054, plugin 0.10.0, 26 novembre 2026)** : preuve et lignes lues dans
+  [`docs/referentiels/vider-cache-onf.md`](referentiels/vider-cache-onf.md) ; textes validés mot pour mot dans la fiche
+  [`pilotage/missions/054-vider-cache-onf.md`](../pilotage/missions/054-vider-cache-onf.md), portés par `TEXTES_VIDER_CACHE_ONF` (`plugin/vision-logique.mjs`), non recopiés ici.
+  **Statut : code livré et testé hors ligne ; la bascule vers du vide n'est pas encore essayée sur le Samsung** (essai prévu a-e, même référentiel § 4).
+  - **Bouton** du panneau, visible seulement quand un cache ONF est inscrit au registre ; grisé pendant un cache en cours et pendant un vidage ; aucun texte pendant le vidage.
+  - **Confirmation** dans le panneau, sans fenêtre bloquante : une question et deux boutons séparés (« Non, garder » en haut, « Oui, vider » en dessous) ;
+    elle se referme seule au bout de **15 secondes** ; sans toucher sur « Oui », rien n'est vidé.
+  - **Mode groupe** (`vision.qgz` actuel) : vider **ne retire aucune couche et n'efface pas `actuel/`** (un chemin fixe sans fichier ferait la page « Impossible de
+    charger certaines couches » à l'ouverture suivante). Le plugin écrit **trois GeoPackage vides** (0 objet, EPSG:2154) dans une génération neuve, les met aux chemins fixes
+    `actuel/<couche>.gpkg` par la **même bascule par renommage que le cache** (contrôle de ce que la couche affiche, retours arrière), puis `reload()`, sort le cache du
+    registre (les entrées de zips restent) et efface les `.avant.gpkg`. Les trois couches restent dans la légende, vides. Jamais `removeMapLayer` sur ces couches.
+    Refus avant toute écriture si une note de reprise est en attente ou si un `-wal` traîne à côté des GeoPackage actuels.
+  - **Mode ancien** (ancien `vision.qgz`) : fichiers mis de côté (`.avant.gpkg`), couches du plugin retirées de la carte par `removeMapLayer` (point de non-retour),
+    registre purgé, fichiers effacés. Un fichier qui résiste n'annule rien : le message nomme les « Fichiers restés sur l'appareil ».
+  - **Refus** : mode ancien avec un registre qui pointe `actuel/` (retour à l'ancien `vision.qgz` après le groupe) : texte d'échec, **rien n'est effacé** (ces fichiers sont attendus par
+    le nouveau projet) ; registre illisible, note de reprise en attente : même texte d'échec. **Retour arrière incomplet** : même texte d'échec, détail dans `dernier-echec.txt`
+    (limite : « l'ancien est gardé » y est inexact ; à l'ouverture suivante, « Cache ONF illisible… » de la 053).
+  - **Jamais touchés** : `vision-imports/<zip>/` et les entrées de zips du registre, `saisie.gpkg`, `vision.qgz`, fonds de carte, couches WFS d'un ancien projet, `dernier-echec.txt`.
+    Tout effacement passe par les gardes du cache (`_cache-onf/` seulement) ; aucune fonction de dossier. Le **dossier de génération vide reste** (limite acceptée plus haut).
+    Le registre étant commun aux projets Vision d'un appareil (§ 11 n° 12), vider le cache d'un projet le sort du registre pour les autres.
+  - **Ensuite** : la ligne « Cache ONF du… » disparaît et le **rappel de la 055** dit « Cache ONF absent… » (`TEXTES_RAPPEL.absent`, aucun texte neuf) ; un nouveau cache reste possible (avec réseau).
 - **Mise à jour d'un appareil en service (consigne, Pascal, 26 novembre 2026)** : (1) **plugin** d'abord ; (2) **ouvrir le projet une fois** (le
   plugin crée les trois GeoPackage vides) ; (3) **copier le nouveau `vision.qgz`** ; (4) ouvrir le projet (le cache existant est migré) et **cocher
   « ONF Cache »** dans la légende : QField réapplique par-dessus le `.qgz` l'état de légende gardé par chemin de projet (`QfProjectInfo`,
@@ -687,6 +708,7 @@ autres résultats (Q2 à Q4) tiennent.
     un groupe (voie C4 prouvée, groupe « ONF Cache ») ; seuil des forêts du cache (toutes échelles) ; double affichage cache + WFS (sans objet).*
 11. **Annulation du cache** : le cache n'a pas de bouton d'annulation (texte non validé) ; l'écran reste figé le temps de
     l'écriture (quelques secondes). *À trancher par Pascal si cela gêne.*
+    *Ajout du 26 novembre 2026 : **le retrait du cache** (et non l'annulation d'un cache en cours) est fermé par la mission 054, bouton « Vider le cache ONF » (§ 3.6, plugin 0.10.0, essai Samsung à faire). L'annulation d'un cache en cours reste ouverte, telle qu'écrite ci-dessus.*
 12. **Registre partagé entre projets Vision d'un appareil (mission 053, 26 novembre 2026)** : deux projets Vision sur un même appareil partagent le
     registre (`vision_id` identique) : couches de zips d'un projet listées dans l'autre, cache de l'un remplacé par celui de l'autre. Contraire à la
     règle « un seul `vision.qgz` par appareil » (§ 3.3), tenue par consigne seulement. Imposer la règle dans le code, ou changer de clé ? *À trancher

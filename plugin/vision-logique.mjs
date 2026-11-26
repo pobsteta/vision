@@ -12,7 +12,7 @@
 // Aucune fonction ne touche QField : tout passe par les objets reçus (réglages, chargerCouche,
 // existe, platformUtilities), que Vision.qml branche sur l'API de QField (plugin/PLAN.md § 5).
 
-export const VERSION = '0.9.0';
+export const VERSION = '0.10.0';
 
 // Mission 038 : comptage des entités par itérateur. Dans QGIS 3a92eb3, `featureCount()` (qgsvectorlayer.h l. 1701,
 // `long long featureCount() const final;`) n'est ni Q_PROPERTY ni Q_INVOKABLE : QML ne peut pas l'appeler. QField v4.3.7
@@ -2316,13 +2316,180 @@ export function cacheEnregistrer(ctx) {
   return { ok: true, message: messageCacheReussi(compte, date), compte: compte, raison: '' };
 }
 
+// ---- vider le cache ONF (mission 054 ; docs/referentiels/vider-cache-onf.md). Textes validés par Pascal le 26 novembre 2026
+// (fiche 054, « Textes validés »), mot pour mot. Pendant le vidage : aucun texte (bouton grisé).
+export const TEXTES_VIDER_CACHE_ONF = {
+  bouton: 'Vider le cache ONF',
+  confirmation: 'Vider le cache ONF ? Il faudra du réseau pour le refaire.',
+  non: 'Non, garder',
+  oui: 'Oui, vider',
+  reussite: 'Cache ONF vidé.',
+  echec: "Cache ONF non vidé : rien n'est changé, l'ancien est gardé.",
+};
+
+// La confirmation, dans le panneau, se referme seule au bout de 15 secondes.
+export const VIDER_CONFIRMATION_DELAI_MS = 15000;
+
+// « Cache ONF vidé. » ou « Cache ONF vidé. Fichiers restés sur l'appareil : a, b. » (noms sans dossier, forme de la 014).
+export function texteViderReussite(restes) {
+  const r = Array.isArray(restes) ? restes : [];
+  if (r.length === 0) return TEXTES_VIDER_CACHE_ONF.reussite;
+  return `${TEXTES_VIDER_CACHE_ONF.reussite} Fichiers restés sur l'appareil : ${r.join(', ')}.`;
+}
+
+// Le bouton n'est visible que si un cache ONF complet (trois couches) est inscrit au registre.
+export function viderCacheVisible(registre) {
+  return entreesDuCache(Array.isArray(registre) ? registre : []).length === CACHE_ONF.couches.length;
+}
+
+// Présence d'un fichier, une exception valant « absent » (rien à effacer) ; le contrôle d'après, lui, est prudent (presentSur).
+function presentSurSansDoute(ctx, chemin) {
+  try { return !!ctx.existe(chemin); } catch (e) { return false; }
+}
+
+// Efface une génération comme effacerGeneration, mais rend les noms (sans dossier) des fichiers qui sont restés.
+function effacerGenerationRestes(ctx, horodatage) {
+  const restes = [];
+  try {
+    const dossierImports = dossierCopies(ctx.dossierProjet);
+    for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+      const p = cacheChemins(ctx.dossierProjet, horodatage, CACHE_ONF.couches[i].couche);
+      if (p === null) continue;
+      const base = p.gpkg.substring(0, p.gpkg.length - '.gpkg'.length);
+      for (let k = 0; k < SUFFIXES_CACHE.length; k++) {
+        const chemin = base + SUFFIXES_CACHE[k];
+        if (!peutToucherCache(chemin, dossierImports) || !presentSurSansDoute(ctx, chemin)) continue;
+        try { ctx.effacerFichier(chemin); } catch (e) { /* vérifié ci-dessous */ }
+        if (presentSur(ctx, chemin)) restes.push(chemin.substring(chemin.lastIndexOf('/') + 1));
+      }
+    }
+  } catch (e) { /* jamais d'exception */ }
+  return restes;
+}
+
+// Vider le cache ONF. ctx = celui de cacheEnregistrer (sans `reponses` : aucun réseau), horodatage = génération de travail.
+// Mode groupe (le projet porte les trois couches) : trois GeoPackage vides écrits dans la génération, puis bascule vers actuel/ et
+//   reload() (basculerGeneration, avec ses retours arrière), registre purgé, anciens fichiers effacés. Jamais removeMapLayer.
+// Mode ancien : fichiers mis de côté (.avant.gpkg), couches du plugin retirées de la carte, registre purgé, fichiers effacés
+//   (un fichier qui résiste est nommé, il n'annule rien).
+// Sans cache inscrit : succès sans effet. Rend { ok, message, raison, restes, etape, details }. Ne lève jamais.
+export function viderCacheOnf(ctx) {
+  const echec = (raison, etape, details) => ({ ok: false, message: TEXTES_VIDER_CACHE_ONF.echec, raison: raison, restes: [], etape: etape || 'contexte', details: details || null });
+  try {
+    return viderCacheOnfInterne(ctx, echec);
+  } catch (e) {
+    return echec('exception : ' + texteException(e), 'exception');
+  }
+}
+
+function viderCacheOnfInterne(ctx, echec) {
+  if (!ctx || !estUuid(ctx.visionId) || cacheDossier(ctx.dossierProjet) === '') return echec('contexte');
+  if (!ctx.reglages || typeof ctx.reglages.value !== 'function' || typeof ctx.existe !== 'function' || typeof ctx.effacerFichier !== 'function') return echec('service absent');
+  if (etatRegistre(ctx.reglages, ctx.visionId).illisible) return echec('registre illisible');
+  let reprise = '';
+  try { reprise = ctx.reglages.value(cleReprise(ctx.visionId), ''); } catch (e) { reprise = 'illisible'; }
+  if (reprise !== undefined && reprise !== null && reprise !== '') return echec('note de reprise en attente');
+  const anciennes = entreesDuCache(lireRegistre(ctx.reglages, ctx.visionId));
+  if (anciennes.length === 0) return { ok: true, message: TEXTES_VIDER_CACHE_ONF.reussite, raison: 'aucun cache inscrit', restes: [], etape: 'rien à faire', details: null };
+  const groupe = groupeDuProjet(ctx);
+  const services = groupe ? ['ecrireFichier', 'ouvrirCouche', 'creerIterateur', 'imposerSysteme', 'reecrireCouche', 'renommer', 'recharger']
+    : ['renommer', 'retirerCacheDeLaCarte'];
+  for (const s of services) if (typeof ctx[s] !== 'function') return echec('service absent : ' + s);
+  return groupe ? viderGroupe(ctx, groupe, anciennes, echec) : viderAncien(ctx, anciennes, echec);
+}
+
+function viderGroupe(ctx, groupe, anciennes, echec) {
+  if (!MOTIF_HORODATAGE.test(String(ctx.horodatage))) return echec('contexte : horodatage');
+  const invalides = [];
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    const code = CACHE_ONF.couches[i].couche;
+    let valide = false;
+    try { valide = groupe[code].isValid === true; } catch (e) { valide = false; }
+    if (!valide) invalides.push(code);
+    const p = cacheCheminsGroupe(ctx.dossierProjet, ctx.horodatage, code);
+    if (p !== null && presentSur(ctx, p.wal)) return echec(code + ' : journal SQLite (-wal) à côté du GeoPackage actuel', 'groupe : -wal', { wal: p.wal });
+  }
+  // Trois GeoPackage vides dans la génération (le GeoPackage écrit n'est pas rouvert : jeu de données GDAL partagé avec la couche du projet).
+  const attendus = {};
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    const c = CACHE_ONF.couches[i];
+    let raison = '';
+    try { raison = creerCacheVide(ctx, c, ctx.horodatage, true); } catch (e) { raison = 'exception : ' + texteException(e); }
+    if (raison !== '') { effacerGeneration(ctx, ctx.horodatage); return echec(c.couche + ' : ' + raison, 'GeoPackage vide'); }
+    attendus[c.couche] = 0;
+  }
+  const b = basculerGeneration(ctx, groupe, ctx.horodatage, attendus, invalides);
+  if (!b.ok) {
+    // Retour arrière incomplet : sauvegardes gardées, reprise notée, registre sans entrées de cache (comme la 053).
+    if (b.defait) effacerGeneration(ctx, ctx.horodatage); else noterReprise(ctx, ctx.horodatage, anciennes);
+    return echec(b.raison, b.etape, b.details);
+  }
+  try {
+    remplacerEntreesCache(ctx, []);
+  } catch (e) {
+    const rates = b.defaire();
+    if (rates.length === 0) effacerGeneration(ctx, ctx.horodatage); else noterReprise(ctx, ctx.horodatage, anciennes);
+    return echec('registre non écrit : ' + texteException(e) + (rates.length > 0 ? ' ; retour arrière incomplet : ' + rates.join(', ') : ''), 'registre');
+  }
+  // L'ancien cache (.avant.gpkg), puis les fichiers d'une génération encore inscrite au registre (migration non faite) : jamais actuel/.
+  effacerGeneration(ctx, ctx.horodatage);
+  const vues = {};
+  for (let i = 0; i < anciennes.length; i++) {
+    const h = anciennes[i].chemin.split('/')[0];
+    if (h !== ctx.horodatage && h !== CACHE_ONF.actuel && !vues[h]) { vues[h] = true; effacerGeneration(ctx, h); }
+  }
+  return { ok: true, message: TEXTES_VIDER_CACHE_ONF.reussite, raison: '', restes: [], etape: 'vidé', details: null };
+}
+
+function viderAncien(ctx, anciennes, echec) {
+  // Un registre qui pointe actuel/ (retour à l'ancien vision.qgz après le groupe) : ces fichiers sont attendus par le nouveau projet.
+  if (anciennes.some((e) => e.chemin.split('/')[0] === CACHE_ONF.actuel)) return echec('mode ancien : le registre pointe actuel/', 'mode ancien : refus');
+  const fait = [];
+  const defaire = () => {
+    const rates = [];
+    for (let i = fait.length - 1; i >= 0; i--) {
+      if (renommerCache(ctx, fait[i].vers, fait[i].de)) fait.splice(i, 1); else rates.push(fait[i].vers + ' -> ' + fait[i].de);
+    }
+    return rates;
+  };
+  const suite = (rates) => (rates.length > 0 ? ' ; retour arrière incomplet : ' + rates.join(', ') : '');
+  // 1. Mettre de côté chaque GeoPackage de la génération (un refus : retour arrière complet, rien n'a changé).
+  for (let i = 0; i < anciennes.length; i++) {
+    const p = cacheCheminsGroupe(ctx.dossierProjet, anciennes[i].chemin.split('/')[0], anciennes[i].couche);
+    if (p === null) { defaire(); return echec(anciennes[i].couche + ' : chemins', 'mode ancien : plan'); }
+    if (!presentSur(ctx, p.nouveau)) continue; // déjà absent : rien à mettre de côté
+    if (!renommerCache(ctx, p.nouveau, p.sauvegarde)) {
+      return echec(anciennes[i].couche + ' : renommage refusé' + suite(defaire()), 'mode ancien : renommage');
+    }
+    fait.push({ de: p.nouveau, vers: p.sauvegarde });
+  }
+  // 2. Retirer les couches du plugin de la carte (removeMapLayer, dans Vision.qml).
+  try { ctx.retirerCacheDeLaCarte(); } catch (e) {
+    return echec('retrait de la carte refusé : ' + texteException(e) + suite(defaire()), 'mode ancien : retrait');
+  }
+  // 3. Purger le registre (les zips restent). Écriture refusée : les fichiers reprennent leur place, le registre reste vrai.
+  try { remplacerEntreesCache(ctx, []); } catch (e) {
+    return echec('registre non écrit : ' + texteException(e) + suite(defaire()), 'registre');
+  }
+  // 4. Effacer : un fichier qui résiste n'annule rien, il est nommé.
+  const restes = [];
+  const vues = {};
+  for (let i = 0; i < anciennes.length; i++) {
+    const h = anciennes[i].chemin.split('/')[0];
+    if (vues[h]) continue;
+    vues[h] = true;
+    for (const nom of effacerGenerationRestes(ctx, h)) if (restes.indexOf(nom) < 0) restes.push(nom);
+  }
+  return { ok: true, message: texteViderReussite(restes), raison: '', restes: restes, etape: 'vidé', details: null };
+}
+
 // ---- ouverture du projet en mode groupe (§ 14.3 et § 14.4)
 
 // Crée le GeoPackage vide d'une couche à son chemin fixe, par la voie prouvée (GML sans objet + .gfs écrits, ouverts par GDAL,
 // réécrits par saveVectorLayerAs : essai C4 du 25 novembre 2026, « vide : valide, 0 objet »). Jamais sur un fichier existant
 // (saveVectorLayerAs écrase sans contrôle) ; le GeoPackage créé n'est PAS rouvert par une couche de travail (son jeu de données GDAL
 // serait partagé avec la couche du projet, et fausserait la relecture après une bascule). Rend '' si créé, sinon la raison.
-function creerCacheVide(ctx, c, horodatage) {
+function creerCacheVide(ctx, c, horodatage, dansGeneration) {
   for (const s of ['ecrireFichier', 'effacerFichier', 'ouvrirCouche', 'creerIterateur', 'reecrireCouche']) {
     if (typeof ctx[s] !== 'function') return 'service absent : ' + s;
   }
@@ -2330,8 +2497,10 @@ function creerCacheVide(ctx, c, horodatage) {
   const p = cacheChemins(ctx.dossierProjet, horodatage, c.couche);
   const g = cacheCheminsGroupe(ctx.dossierProjet, horodatage, c.couche);
   if (p === null || g === null) return 'chemins';
-  if (!peutToucherCache(p.gml, dossierImports) || !peutToucherCache(p.gfs, dossierImports) || !peutRenommerCache(g.actuel, dossierImports)) return 'chemin refusé';
-  if (presentSur(ctx, g.actuel)) return 'fichier déjà présent';
+  // Mission 054 : `dansGeneration` écrit le GeoPackage vide dans la génération (<horodatage>/<couche>.gpkg), pas à actuel/.
+  const cible = dansGeneration ? p.gpkg : g.actuel;
+  if (!peutToucherCache(p.gml, dossierImports) || !peutToucherCache(p.gfs, dossierImports) || !peutRenommerCache(cible, dossierImports)) return 'chemin refusé';
+  if (presentSur(ctx, cible)) return 'fichier déjà présent';
   let raison = '';
   try {
     if (ctx.ecrireFichier(p.gml, cacheGmlVide(c.couche)) !== true) return 'écriture du GML refusée';
@@ -2341,8 +2510,8 @@ function creerCacheVide(ctx, c, horodatage) {
     if (systemeDe(l) === '' && typeof ctx.imposerSysteme === 'function') { try { ctx.imposerSysteme(l); } catch (e) { /* refusé au contrôle */ } }
     raison = controlerCoucheCache(ctx, l, c, 0);
     if (raison !== '') return 'GML vide : ' + raison;
-    const rendu = String(ctx.reecrireCouche(l, g.actuel) || '');
-    if (rendu !== g.actuel) return 'GeoPackage non écrit (' + rendu + ')';
+    const rendu = String(ctx.reecrireCouche(l, cible) || '');
+    if (rendu !== cible) return 'GeoPackage non écrit (' + rendu + ')';
     return '';
   } catch (e) {
     return 'exception : ' + texteException(e);
