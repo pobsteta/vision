@@ -2,6 +2,8 @@
 # (décision de Pascal n° 2, 3 novembre 2026 ; plugin/PLAN.md § 6) :
 #  - push sur la branche d'une mission du plugin : préversion « plugin-essai », écrasée à
 #    chaque push, pour l'essai de Pascal sur le Samsung avant fusion ;
+#    claude/friendly-hypatia-jo05ap : branche de la mission 053, ajoutée le 26 novembre 2026 (lancement
+#    manuel refusé à la session cloud), temporaire, à retirer avant la fusion vers main ;
 #  - push sur main : release « plugin-v<version> » (version lue dans plugin/metadata.txt),
 #    publiée seulement si plugin/ a changé dans le push (décision de Pascal, 3 novembre 2026 ;
 #    outils/decider-release.mjs), sinon sortie verte ; refusée si l'étiquette existe déjà
@@ -18,7 +20,7 @@
 name: Release du plugin
 on:
   push:
-    branches: ['main', 'mission/050-vision', 'mission/052-styles-modeles']
+    branches: ['main', 'mission/050-vision', 'mission/052-styles-modeles', 'claude/friendly-hypatia-jo05ap']
     paths: ['plugin/**', 'tests/**', '.github/workflows/release-plugin.yml']
   workflow_dispatch:
 permissions:
