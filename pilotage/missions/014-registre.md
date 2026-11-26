@@ -108,4 +108,4 @@ la couche retirée ne revient pas ; le zip réimporté remplace l'ancien.
 - La spec (`docs/spec.md` § 3.3 et § 11 n° 2) a été modifiée dans cette mission **à la demande de l'orchestrateur** (harnais
   élargi pour la reprise, la fiche d'origine interdisant d'y toucher).
 - Décision de Pascal du 26 novembre : au réimport, une couche sautée parce qu'une annexe résiste doit être rechargée sur la
-  carte depuis son ancienne copie. Elle contredit D3-04 du testeur (`!ajoutees2.includes('a')`) : en attente de l'orchestrateur.
+  carte depuis son ancienne copie. Elle contredisait D3-04 du testeur (`!ajoutees2.includes('a')`) : réglé le 26 novembre, D3-04 réécrit par le testeur (5d32f32), rechargement réalisé par le dev (c9de86c).

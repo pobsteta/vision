@@ -123,7 +123,7 @@ Ces référentiels sont à rassembler par l'`acquereur` (§ 8).
   26 novembre 2026) : les fichiers des couches disparues du zip sont effacés, ceux des couches
   gardées sont réécrits ; avant la réécriture d'une couche gardée, ses annexes `-wal`, `-shm` et
   `.aux.xml` sont effacées (jamais son `.gpkg`). Si une annexe refuse de s'effacer, **la couche
-  n'est pas réécrite** (ancienne copie, registre et carte inchangés) et la ligne « Fichiers restés
+  n'est pas réécrite** (ancienne copie et registre inchangés, couche rechargée sur la carte depuis l'ancienne copie, en lecture seule) et la ligne « Fichiers restés
   sur l'appareil : … » la nomme. **Limite : dossier vide laissé** (décision de Pascal du
   26 novembre 2026) : le plugin n'efface jamais de dossier, ni au retrait de la dernière couche ni
   au réimport, et n'en dit rien. Raison : la seule voie, `platformUtilities.removeDataset` de
