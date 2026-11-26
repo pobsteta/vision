@@ -4,6 +4,13 @@
 > ajouter ce service WFS au projet vision avec les couches Forêt, parcelles et point de rencontre en
 > prenant comme style les styles joints »). **Statut : validée par Pascal le 25 novembre 2026** (« je valide »).
 >
+> **Statut au 26 novembre 2026 (archiviste)** : étapes 1 à 3 faites, essai Samsung réussi (étape 3, temps 3 : tests 1 à 6 ; temps 4 : points A et B ;
+> point C non fait, accepté par Pascal), documentation écrite (ADR 0010 amendée, spec § 3.3, § 3.6, § 11, README, notes de release) ; **reste** : validation de la PR vers `main` par Pascal
+> (déclencheur temporaire retiré, e2cd6a2 ; relecture d'ensemble faite) ; question ouverte : spec § 11 n° 12. Le titre de la fiche (« WFS ») est historique : le WFS est retiré de
+> `vision.qgz` (arbitrage du 26 novembre 2026). **Pièces** : `docs/referentiels/brut/onf/` (service, styles, sondes, mesure),
+> `docs/referentiels/brut/onf/essai-c4-2026-11-26/` et `docs/referentiels/brut/onf/essai-temps4-2026-11-26/` (essais Samsung),
+> `docs/referentiels/cache-zone-qfield.md` §§ 14, 15, 15 bis (preuves).
+>
 > **Changement de cap** : le bilan n° 1 (5 novembre 2026) suspendait les nouvelles fonctions jusqu'aux
 > résultats de recette ; Pascal lève cette pause pour ce sujet en le demandant (journal du 25 novembre).
 
@@ -31,14 +38,36 @@
 
 ## Arbitrages de Pascal (25 novembre 2026)
 
-1. **Copie locale et WFS** : une copie embarquée sert sans réseau, le WFS avec réseau.
+1. ~~**Copie locale et WFS** : une copie embarquée sert sans réseau, le WFS avec réseau.~~ **Remplacé le
+   25 novembre 2026** (Pascal, « oui je valide ») par le **cache de zone sur le mobile** : avec réseau, l'agent
+   cadre sa zone et le plugin enregistre en GeoPackage, dans `vision-imports/`, les objets des trois couches
+   sur cette emprise ; sans réseau, ce cache s'affiche et revient à la réouverture. Plus de copie nationale.
 2. **Affichage** : groupe « ONF » sous la couche « Saisie terrain », au-dessus des fonds ; requêtes WFS
    limitées à l'emprise visible ; Forêts cochée ; Parcelles et Points de secours cochés mais visibles
    seulement en deçà du 1:50 000.
 
+## Arbitrages de Pascal après la mesure n° 1 (25 novembre 2026)
+
+3. **Étiquette des forêts** : `iidtn_frt` (identifiant ONF), à la place de `CCOD_FRT` absent du service.
+4. **Styles adaptés** aux champs réels du service (`ccod_prf` en minuscules pour les parcelles ; formulaire
+   des points de secours sur `iidtn_prs`, `llib_prs`, `llib_com`…), symboles, couleurs et seuils gardés :
+   copies adaptées générées depuis les `.qml` de Pascal, qui restent intacts dans `docs/referentiels/brut/onf/`.
+
+5. **Plafond du cache** : zone de 20 km de côté au plus et 5 000 objets par couche au plus ; au-delà, refus et
+   demande de zoomer.
+6. **Rangement** : le cache en tête de liste (un plugin ne peut pas ranger une couche dans un groupe,
+   `layerTreeRoot()` non exposé à QML) ; l'arbitrage n° 2 (groupe « ONF ») vaut pour les couches WFS du
+   projet modèle seulement.
+7. **Une seule zone à la fois** : un nouveau cache remplace le précédent, gardé si le nouveau échoue.
+
+Mesure n° 1 : `docs/referentiels/brut/onf/mesure-2026-11-25.md` (service en WFS 1.0.0, 1.1.0 et 2.0.0 ;
+17 190 forêts, 408 400 parcelles, 24 343 points ; licence non lue).
+
 ## Mission
 
-**En une phrase :** Ajouter à `vision.qgz` un groupe « ONF » donnant les forêts publiques, les parcelles
+**En une phrase (telle qu'amendée et livrée, 26 novembre 2026) :** Donner à `vision.qgz` un groupe « ONF Cache » avec les forêts publiques, les parcelles forestières et les points de rencontre des secours de l'ONF, aux styles de Pascal, remplis par un **cache de zone** que l'agent fait avec réseau ; plus aucune couche WFS dans `vision.qgz` ; hors réseau, le projet s'ouvre sans page d'erreur et le cache s'affiche.
+
+*Formulation initiale, remplacée le 26 novembre 2026 :* Ajouter à `vision.qgz` un groupe « ONF » donnant les forêts publiques, les parcelles
 forestières et les points de rencontre des secours du service WFS de l'ONF, aux styles fournis par Pascal,
 lisibles **sans réseau** par une copie locale et à jour **avec réseau** par le WFS.
 
@@ -58,35 +87,123 @@ Un workflow `workflow_dispatch` (`.github/workflows/mesure-wfs-onf.yml`) et un o
 
 **Ne doit pas :** toucher à `vision.qgz`, au plugin ou aux zips publiés ; trancher quoi que ce soit.
 
-### Arbitrage de Pascal attendu après l'étape 1
+### Étape 1 bis — `dev` : prototype du cache de zone (preuve avant code)
 
-Selon les poids mesurés : copie de toute la métropole dans `projet-vision.zip`, ou copie séparée
-(fichier à part, par direction territoriale ou agence), rythme de mise à jour, nom du fichier
-(proposition : `onf.gpkg`, trois tables), et sort des étiquettes si un champ manque.
+Ouverte le 25 novembre 2026 après le choix du cache de zone. **Preuve d'abord, dans le code de QField
+4.3.7 (et de QGIS qu'il embarque), avec fichiers et lignes cités**, avant toute ligne de plugin :
 
-### Étape 2 — `dev` : projet modèle (après l'arbitrage)
+- comment un plugin QML peut obtenir les objets d'une couche WFS sur une emprise (couche WFS du projet
+  filtrée par l'emprise de la carte, requête `GetFeature` + `BBOX` par `XMLHttpRequest` puis chargement,
+  ou autre voie), et les **écrire en GeoPackage** dans `vision-imports/` (fonction déjà utilisée par les
+  imports, mission 047 : `saveVectorLayerAs`) ; ce qui est exposé à QML et ce qui ne l'est pas ;
+- trafic `http` non chiffré depuis QField Android (`usesCleartextTraffic` / configuration réseau du paquet) ;
+- emprise de la carte lisible depuis le plugin, en Lambert 93 ;
+- comment le cache s'inscrit au registre (`vision_id`, marques `vision/*`) pour revenir à la réouverture
+  et être remplacé au cache suivant de la même couche.
 
-- `outils/projet-modele.mjs` : groupe « ONF » entre « Saisie terrain » et « Fonds de carte » ; pour
-  chaque couche, la copie locale (cochée selon l'arbitrage n° 2) et la couche WFS (`provider="WFS"`,
-  `version='1.0.0'`, `typename=…`, `srsname='EPSG:2154'`, `restrictToRequestBBOX='1'`,
-  lecture seule), rangée dans un sous-groupe « ONF en ligne (à jour) » **décoché** : les deux ne
-  s'affichent pas l'une sur l'autre par défaut (proposition à confirmer à l'arbitrage).
-- Styles : les trois `.qml` de Pascal (`docs/referentiels/brut/onf/`, intacts) recopiés dans `vision.qgz` par l'outil ; seuils d'échelle de l'arbitrage n° 2.
-- Copie locale fabriquée par l'outil de l'étape 1 et jointe aux zips par
-  `outils/zips-projet-modele.mjs` (ou à part, selon l'arbitrage) ; `projet-vision-mise-a-jour.zip`
-  ne doit jamais contenir `saisie.gpkg` (garde existante).
-- Tests (`tests/projet-modele.test.mjs`, `tests/outil-projet-modele.test.mjs`,
-  `tests/zips-projet-modele.test.mjs`) : groupe et ordre, sources WFS exactes, lecture seule,
-  seuils, styles identiques aux `.qml` fournis, copie locale présente et en Lambert 93 ; aucun
-  affaiblissement.
-- Spec § 3.4 (ou nouveau § 3.6) et README à jour ; ADR **0010** « Couches ONF : copie locale et
-  WFS » proposée par l'orchestrateur, **tranchée par Pascal**.
-- **Ne doit pas :** toucher au plugin ni à la bibliothèque de styles (`plugin/styles/`) ; mettre une
-  clé ; ajouter `DT_FR`, `ATE_FR` ou `RB_FR` (hors demande).
+Puis, si une voie est prouvée : un **prototype minimal** (plugin d'essai séparé ou branche du plugin,
+version d'essai), un bouton qui met en cache les trois couches sur l'emprise visible, avec un plafond
+d'emprise ou de nombre d'objets proposé (à trancher par Pascal), et un **protocole d'essai sur le
+Samsung** (une forêt, avec réseau puis en mode avion, réouverture). Si aucune voie n'est prouvée :
+s'arrêter et décrire les options à Pascal.
+
+**Ne doit pas :** publier en stable ; toucher à `vision.qgz` ; trancher le plafond, les textes affichés
+ou le sort des étiquettes ; écrire un texte affiché sans le soumettre à Pascal.
+
+### Étape 1 ter — `dev` : prototype du cache de zone (ouverte le 25 novembre 2026)
+
+La sonde a prouvé la voie B sur le Samsung (QField 4.3.8, essais n° 1 à 4 au journal, captures dans
+`docs/referentiels/brut/onf/`) : `GetFeature` + `BBOX` en http, GML lu avec les accents, réécrit en GeoPackage,
+relu sans réseau. Le prototype est le **cache de zone dans le plugin**, publié en préversion `plugin-essai`,
+**sonde retirée** :
+
+- bouton dans le panneau ; emprise visible (carte tournée : les quatre coins) ; plafonds n° 5 ; les trois couches ;
+  contrôle de complétude obligatoire (fin de collection, aucune exception, nombre d'objets ≤ 5 000) ;
+- **système imposé EPSG:2154** aux couches reçues (« système inconnu » à chaque réponse) et **type de géométrie
+  fixé** (MultiPolygon pour forêts et parcelles, Point pour les points : la réponse donne tantôt Polygon, tantôt
+  MultiPolygon) ; champ parasite `gml_id` (et `coordinates` s'il apparaît) écarté ;
+- enregistrement en GeoPackage selon la forme R2 corrigée de `docs/referentiels/cache-zone-qfield.md` (une
+  génération par dossier, remplacement tout ou rien, ancien cache gardé en cas d'échec), rechargement à la
+  réouverture du projet, cache en tête de liste, lecture seule ;
+- **styles adaptés** (arbitrages n° 3 et 4) générés depuis les `.qml` de Pascal, qui restent intacts : forêts
+  étiquetées par `iidtn_frt`, parcelles par `ccod_prf`, formulaire des points sur les vrais champs ;
+- libération des couches de travail impossible en QML (Qt 6.10.3) : ne pas l'appeler, le dire en commentaire ;
+- textes validés par Pascal (ci-dessous), mot pour mot ; version du plugin montée (préversion seulement) ;
+- tests hors réseau de toute la logique ; protocole d'essai Samsung court (forêt de JFC, avec réseau, mode avion,
+  réouverture, zone trop grande, coupure).
+
+**Textes validés par Pascal (25 novembre 2026, « Je valide »)** — les nombres et la date sont remplis par le plugin :
+
+| Moment | Texte |
+|---|---|
+| Bouton | « Mettre en cache les couches ONF de cette zone » |
+| Pendant | « Téléchargement des couches ONF… » |
+| Réussite | « Couches ONF en cache : 4 forêts, 53 parcelles, 1 point de rencontre (zone du 25/11/2026). » |
+| Zone trop grande | « Zone trop grande (plus de 20 km de côté) : zoomez, puis recommencez. » |
+| Trop d'objets | « Trop d'objets dans cette zone (plus de 5 000 parcelles) : zoomez, puis recommencez. » |
+| Pas de réseau | « Pas de réseau : le cache ONF n'est pas mis à jour, l'ancien est gardé. » |
+| Réponse incomplète | « Réponse incomplète du service ONF : le cache n'est pas mis à jour, l'ancien est gardé. » |
+| Dans le panneau | « Cache ONF du 25/11/2026 : 4 forêts, 53 parcelles, 1 point de rencontre. » |
+| Noms des couches | « Forêts publiques (© ONF) », « Parcelles forestières (© ONF) », « Points de secours (© ONF) » (remplacés le 25 novembre 2026, attribution dans le nom ; « Points de secours » raccourci par Pascal le même jour) |
+
+Attribution des trois couches : « © ONF » (validée par Pascal le 25 novembre 2026 ; accord de l'ONF rapporté par
+Pascal, trace écrite à verser).
+
+**Arbitrages de Pascal sur le prototype (25 novembre 2026)** :
+- textes ajoutés validés : « Enregistrement du cache ONF impossible : le cache n'est pas mis à jour, l'ancien est
+  gardé. » ; « Carte hors de France métropolitaine : le cache ONF n'est pas mis à jour, l'ancien est gardé. » ;
+  « Cache ONF illisible : il n'est pas affiché ; remettez-le en cache avec réseau. » ; « _cache-onf.zip : nom
+  réservé par Vision (cache ONF), rien n'est importé. » ;
+- attribution du cache **dans le nom des couches** (le plugin ne peut pas poser `rights`) : « Forêts publiques
+  (© ONF) », « Parcelles forestières (© ONF) », « Points de secours (© ONF) » (nom raccourci par Pascal, 25 novembre 2026) ;
+- **mêmes seuils** que l'arbitrage n° 2 pour les couches du cache (parcelles et points en deçà du 1:50 000) ;
+- texte ajouté pour une emprise illisible : « Position de la carte illisible : le cache ONF n'est pas mis à jour,
+  l'ancien est gardé. » (« Carte hors de France métropolitaine … » reste pour une carte hors de France) ;
+- plugin d'essai en **0.7.0** dès maintenant (README et tests adaptés sans affaiblissement).
+
+« Trop d'objets » nomme la couche en cause (parcelles, forêts ou points de rencontre). Tout autre texte est soumis à
+Pascal avant d'être écrit.
+
+### Étape 2 — `dev` : projet modèle et plugin (après l'essai du prototype sur le Samsung)
+
+- `outils/projet-modele.mjs` : groupe « ONF » entre « Saisie terrain » et « Fonds de carte », avec les
+  trois couches WFS (`provider="WFS"`, version et paramètres selon la mesure de l'étape 1,
+  `restrictToRequestBBOX='1'`, lecture seule), aux styles de Pascal (`docs/referentiels/brut/onf/`,
+  intacts), seuils de l'arbitrage n° 2.
+- Plugin : bouton de cache de zone selon le prototype validé ; cache affiché au-dessus ou à la place des
+  couches WFS (à trancher après le prototype) ; textes validés par Pascal.
+- Tests (projet modèle, plugin, logique du cache hors réseau) ; aucun affaiblissement.
+- Spec (§ 3.3 et nouveau § 3.6) et README à jour ; ADR **0010** « Couches ONF : WFS et cache de zone sur
+  le mobile » proposée par l'orchestrateur, **tranchée par Pascal**.
+- **Ne doit pas :** toucher à la bibliothèque de styles (`plugin/styles/`) ; mettre une clé ; ajouter
+  `DT_FR`, `ATE_FR` ou `RB_FR` (hors demande).
+
+### Étape 3 — groupe « ONF Cache » (ouverte le 25 novembre 2026, demande de Pascal)
+
+Pascal : « renommer le groupe ONF en ONF WFS et ajouter un groupe ONF Cache ». Le groupe « ONF » de `vision.qgz`
+devient **« ONF WFS »** ; un groupe **« ONF Cache »** reçoit les trois couches du cache, qui ne s'empilent plus en tête
+de liste (voie C4 de `docs/referentiels/cache-zone-qfield.md` : un plugin ne peut ni créer un groupe ni y ranger une
+couche ; le projet modèle porte donc le groupe et trois couches à chemin fixe que le plugin remplit). **Preuve
+avant code** dans les sources de QField 4.3.7 / QGIS : relecture d'une couche existante après remplacement de son
+fichier (API exposée à QML), remplacement d'un GeoPackage ouvert sur Android, tout ou rien avec des chemins fixes,
+GeoPackage vides livrés avec le projet, rechargement et registre, place du groupe (proposition : « ONF Cache » au-dessus
+de « ONF WFS »). Si une voie est prouvée : prototype, essai Samsung, puis documentation et ADR 0010 amendée.
+
+**Arbitrages de Pascal sur l'étape 3 (25 novembre 2026)** : voie 1 du § 14 de la pièce (couches à chemin fixe
+`vision-imports/_cache-onf/actuel/<couche>.gpkg` dans le groupe « ONF Cache » de `vision.qgz`, bascule par renommage
+avec retour arrière, `reload()`, GeoPackage vides dans `projet-vision.zip` seulement, jamais dans la mise à jour,
+fichiers manquants créés par le plugin, migration du cache existant, consigne « plugin d'abord, puis vision.qgz ») ;
+groupes « ONF Cache » et « ONF WFS » **cochés tous les deux** par défaut ; **sonde courte sur le Samsung d'abord**.
+
+**Arbitrages de Pascal après l'essai du temps 3 (26 novembre 2026)** : groupe « ONF WFS » retiré de `vision.qgz` (hors réseau, ses couches
+donnaient « Impossible de charger certaines couches » ; le cache est la seule source ONF du projet) ; texte validé pour une couche du cache invalide au
+moment du bouton : « Cache ONF prêt : fermez puis rouvrez le projet pour l'afficher. » ; forêts du cache visibles à toutes les échelles.
 
 ## Terrain
 
-Sur le Samsung : avec réseau, les trois couches s'affichent aux styles fournis, Parcelles et Points
+**Terrain tel que livré (26 novembre 2026)** : sur le Samsung, avec réseau, le bouton met la zone en cache ; en mode avion, ouverture sans page d'erreur et trois couches du cache dans « ONF Cache » (essais du 26 novembre, tests 1 à 6, points A et B ; flèches du point de secours non vérifiées).
+
+*Formulation initiale, remplacée le 26 novembre 2026 :* sur le Samsung, avec réseau, les trois couches s'affichent aux styles fournis, Parcelles et Points
 de secours en deçà du 1:50 000 ; hors réseau (mode avion), la copie locale s'affiche seule ; flèches
 du point de secours visibles (sinon, signaler).
 

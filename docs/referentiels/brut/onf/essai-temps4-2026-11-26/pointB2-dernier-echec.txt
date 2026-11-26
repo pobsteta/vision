@@ -1,0 +1,13 @@
+Vision, cache ONF : dernier échec
+Date : 2026-11-26T11:06:44.418Z
+Vision 0.7.0 ; QField v4.3.8
+Étape : groupe : couche invalide
+Message affiché : Enregistrement du cache ONF impossible : le cache n'est pas mis à jour, l'ancien est gardé.
+Raison : PRS_FR : couche du projet invalide (à rouvrir le projet : reload() ne la répare pas)
+contexte.visionId : d98bf4b8-0fac-4dac-85cf-58e6701aceeb
+contexte.dossierProjet : /storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision_2
+contexte.horodatage : 20261126T110643Z
+contexte.emprise : {"xmin":898159.3705722431,"ymin":6675302.504917202,"xmax":903137.4987336125,"ymax":6685971.774388053}
+contexte.depart.visionId : d98bf4b8-0fac-4dac-85cf-58e6701aceeb
+contexte.depart.dossierProjet : /storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision_2
+couche : PRS_FR

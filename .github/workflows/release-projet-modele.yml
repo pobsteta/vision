@@ -1,5 +1,6 @@
 # Publie les deux zips du projet modèle (mission 021, décision de Pascal n° 3, 3 novembre 2026) :
-#  - projet-vision.zip             : vision.qgz + saisie.gpkg vide = PREMIÈRE INSTALLATION, une fois par appareil ;
+#  - projet-vision.zip             : vision.qgz + saisie.gpkg vide + trois GeoPackage vides du cache ONF
+#                                  (vision-imports/_cache-onf/actuel/, mission 053) = PREMIÈRE INSTALLATION, une fois par appareil ;
 #  - projet-vision-mise-a-jour.zip : vision.qgz seul = MISE À JOUR, par copie de vision.qgz à la main (câble USB) ;
 #                                  sans saisie.gpkg : il ne peut pas écraser les points déjà saisis. Pas de
 #                                  flashcode : QField importe un zip dans un dossier neuf (mission 028).
@@ -73,8 +74,9 @@ jobs:
             echo
             echo "Version du $(date -u +%Y-%m-%d), commit ${GITHUB_SHA}."
             echo
-            echo "- Première installation sur un appareil : projet-vision.zip (vision.qgz + saisie.gpkg vide), par le flashcode ci-dessous."
+            echo "- Première installation sur un appareil : projet-vision.zip (vision.qgz + saisie.gpkg vide + trois GeoPackage vides du cache ONF, dans vision-imports/_cache-onf/actuel/), par le flashcode ci-dessous."
             echo "- Mise à jour d'un appareil déjà en service : projet-vision-mise-a-jour.zip (vision.qgz seul), à la main. Décompresser le zip sur l'ordinateur, puis, câble USB branché, copier vision.qgz dans le dossier du projet de l'appareil, en remplaçant l'ancien vision.qgz. Pas de flashcode pour la mise à jour : QField importe un projet zippé dans un dossier neuf, donc un autre projet, sans les points saisis. Ne jamais recopier un saisie.gpkg vide par-dessus un saisie.gpkg déjà rempli."
+            echo "- Ordre de la mise à jour d'un appareil en service (couches ONF, mission 053) : 1. mettre à jour le plugin Vision ; 2. ouvrir le projet une fois (le plugin crée les trois GeoPackage vides du cache) ; 3. copier le nouveau vision.qgz ; 4. rouvrir le projet puis cocher « ONF Cache » dans la légende (QField réapplique l'ancien état de la légende : le nouveau groupe arrive décoché). La mise à jour ne contient jamais les GeoPackage du cache : ils ne doivent pas écraser un cache rempli. Dans un autre ordre : page « Impossible de charger certaines couches » une fois, couches ONF vides jusqu'à la réouverture."
             echo
             echo '```'
             sha256sum dist/*.zip

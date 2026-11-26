@@ -14,9 +14,11 @@ Item {
   property var vision: null      // objet de Vision.qml
   property var hote: null      // main.qml (dernierMessage)
   property var couches: []
+  property string ligneCache: ""
 
   function relire() {
     couches = vision ? vision.couchesInscrites() : [];
+    ligneCache = vision ? vision.cacheLigne() : "";
   }
 
   Component.onCompleted: relire()
@@ -46,6 +48,25 @@ Item {
         font.pointSize: 18
         text: "Ajouter un zip"
         onClicked: panneau.vision.ajouterZip()
+      }
+
+      // Mission 053, étape 1 ter : cache de zone des couches ONF (textes validés par Pascal, Logique.TEXTES_CACHE_ONF).
+      Button {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 72
+        font.pointSize: 18
+        enabled: panneau.vision && !panneau.vision.cacheEnCours
+        text: panneau.vision ? (panneau.vision.cacheEnCours ? panneau.vision.textePendantCache : panneau.vision.texteBoutonCache) : ""
+        onClicked: panneau.vision.mettreEnCacheOnf()
+      }
+
+      Label {
+        Layout.fillWidth: true
+        visible: panneau.ligneCache !== ""
+        wrapMode: Text.WordWrap
+        color: "black"
+        font.pointSize: 16
+        text: panneau.ligneCache
       }
 
       Rectangle {

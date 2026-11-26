@@ -9,6 +9,7 @@ import "vision-logique.mjs" as Logique
 import "vision-controles.mjs" as Controles
 import "vision-styles.mjs" as Styles
 import "vision-bibliotheque.mjs" as Bibliotheque
+import "vision-styles-onf.mjs" as StylesOnf
 
 Item {
   id: vision
@@ -189,8 +190,10 @@ Item {
   // QField v4.3.7 (qflayerutils.cpp l. 618 et 624) la rend en CppOwnership : sans deleteLater, personne ne la détruit.
   // La logique ne l'appelle jamais sur une couche ajoutée au projet, ni deux fois sur la même.
   // Mission 049 : vrai si la couche porte la marque Vision, donc appartient au projet (ajoutée par le chargeur) : jamais libérée.
+  // Mission 053 : une couche du cache ONF (marque vision/cache) appartient aussi au projet (forme R2 corrigée, point 2).
   function coucheDuProjet(couche) {
-    return !!couche && typeof couche.customProperty === "function" && String(couche.customProperty("vision/zip", "")) !== "";
+    if (!couche || typeof couche.customProperty !== "function") return false;
+    return String(couche.customProperty("vision/zip", "")) !== "" || String(couche.customProperty("vision/cache", "")) !== "";
   }
 
   function libererCouche(couche) {
@@ -331,16 +334,23 @@ Item {
   // Geste 2 : ouverture du projet. Rend le résultat de demarrerProjet.
   function demarrer() {
     const id = visionId();
-    const r = Logique.demarrerProjet({
+    // Mission 053, étape 3 : les services du cache (dont ceux du groupe « ONF Cache » du projet) servent aussi à l'ouverture :
+    // création des GeoPackage absents et migration d'un cache en génération vers actuel/ (Logique.demarrerProjet).
+    const r = Logique.demarrerProjet(Object.assign({
       variables: variables(),
       reglages: reglages,
       dossierProjet: dossierProjet(),
-      existe: function (chemin) { return FileUtils.fileExists(chemin); },
       fondDejaPresent: fondDejaPresent,
       libererCouche: libererCouche,
       coucheDuProjet: coucheDuProjet,
-      chargerCouche: id ? chargeur() : function () { return null; }
-    });
+      chargerCouche: id ? chargeur() : function () { return null; },
+      chargerCache: id ? chargerCache : function () { return null; }
+    }, servicesCache()));
+    if (r && r.cache && r.cache.notes) {
+      for (let i = 0; i < r.cache.notes.length; i++) console.log("Vision, cache ONF : " + r.cache.notes[i]);
+      // Dit aussi dans dernier-echec.txt (migration ou reprise manquée, fichier non créé).
+      if (r.cache.notes.length > 0) cacheDiagnostic({ etape: "ouverture du projet", message: r.message, contexte: contexteCache(null), details: { notes: r.cache.notes.join(" | ") } });
+    }
     registreChange();
     return r;
   }
@@ -466,9 +476,279 @@ Item {
     registreChange();
   }
 
-  // Couches du registre, pour le panneau.
+  // Couches des zips du registre, pour le panneau (le cache ONF a sa propre ligne : cacheLigne).
   function couchesInscrites() {
     const id = visionId();
-    return id ? Logique.lireRegistre(reglages, id) : [];
+    return id ? Logique.entreesDesZips(Logique.lireRegistre(reglages, id)) : [];
   }
+
+  // ==== cache ONF (mission 053, étape 1 ter ; docs/referentiels/cache-zone-qfield.md, voie B prouvée par la sonde)
+  // Avec réseau : GetFeature WFS 1.0.0 + BBOX des trois couches ONF sur l'emprise visible, l'une après l'autre, par
+  // iface.createHttpRequest (QField v4.3.7 qfappinterface.h l. 230 ; qfxmlhttprequest.h l. 62-212) ; puis
+  // Logique.cacheEnregistrer (GML écrit, .gfs de Vision, GeoPackage, style, contrôles, remplacement tout ou rien).
+  // Sans réseau : le cache revient à la réouverture (Logique.demarrerProjet, chargerCache).
+  // Libération des couches de travail : impossible en QML (Qt 6.10.3 cache deleteLater ; destroy() refuse une couche en
+  // CppOwnership : cache-zone-qfield.md § 10) ; elles ne sont pas libérées, voir Logique.cacheEnregistrer.
+  property bool cacheEnCours: false
+  readonly property string texteBoutonCache: Logique.TEXTES_CACHE_ONF.bouton
+  readonly property string textePendantCache: Logique.TEXTES_CACHE_ONF.pendant
+
+  // Couche du cache ONF déjà sur la carte (marques vision/cache=onf et vision/couche), ou null.
+  function coucheDuCache(nomCouche) {
+    if (!qgisProject) return null;
+    const couches = ProjectUtils.mapLayers(qgisProject);
+    for (const id in couches) {
+      const l = couches[id];
+      if (!l || typeof l.customProperty !== "function") continue;
+      // Mode ancien : jamais une couche du groupe du projet (elle n'a pas la marque d'origine du plugin).
+      if (String(l.customProperty("vision/origine", "")) !== "plugin") continue;
+      if (String(l.customProperty("vision/cache", "")) === "onf" && String(l.customProperty("vision/couche", "")) === nomCouche) return l;
+    }
+    return null;
+  }
+
+  // Mission 053, étape 3 (docs/referentiels/cache-zone-qfield.md § 14.4) : couche du groupe « ONF Cache » de vision.qgz, trouvée par
+  // ses marques (vision/cache=onf, vision/couche) ; une couche ajoutée par le plugin (mode ancien, marque vision/origine) n'en est pas
+  // une. Valide ou non : la logique juge. Le plugin ne l'ajoute ni ne la retire jamais de la carte (bascule : renommer, recharger).
+  function coucheDuGroupe(nomCouche) {
+    if (!qgisProject) return null;
+    const couches = ProjectUtils.mapLayers(qgisProject);
+    for (const id in couches) {
+      const l = couches[id];
+      if (!l || typeof l.customProperty !== "function") continue;
+      if (String(l.customProperty("vision/origine", "")) === "plugin") continue;
+      if (String(l.customProperty("vision/cache", "")) === "onf" && String(l.customProperty("vision/couche", "")) === nomCouche) return l;
+      // Repli (lecture des propriétés d'une couche CHARGÉE PAR LE PROJET non prouvée sur l'appareil) : l'identifiant que vision.qgz
+      // donne à la couche du groupe, « ONF_Cache_<couche>_<empreinte> » (outils/projet-modele.mjs, idCache).
+      if (String(l.id).indexOf("ONF_Cache_" + nomCouche + "_") === 0) return l;
+    }
+    return null;
+  }
+
+  // Mode ancien (ancien vision.qgz, sans groupe) : marque la couche du cache et l'ajoute à la carte : ProjectUtils.addMapLayer la
+  // met en tête de liste (arbitrage n° 6). « vision/origine » la distingue des couches du projet, que le plugin ne retire jamais.
+  function ajouterCache(couche, nomCouche) {
+    couche.setCustomProperty("vision/cache", "onf");
+    couche.setCustomProperty("vision/couche", nomCouche);
+    couche.setCustomProperty("vision/origine", "plugin");
+    ProjectUtils.addMapLayer(qgisProject, couche);
+  }
+
+  // Réouverture du projet : chargerCache(source, nom affiché, couche du service) ; rend la couche (valide ou non).
+  function chargerCache(source, nom, nomCouche) {
+    const deja = coucheDuCache(nomCouche);
+    if (deja) return deja.isValid ? deja : null;
+    const couche = LayerUtils.loadVectorLayer(source, nom);
+    if (couche && couche.isValid) ajouterCache(couche, nomCouche);
+    return couche;
+  }
+
+  // Mode ancien : retire de la carte les couches du cache ONF ajoutées par le plugin (ProjectUtils.removeMapLayer : le projet les
+  // détruit), jamais celles du groupe du projet (étape 3).
+  function retirerCacheDeLaCarte() {
+    if (!qgisProject) return;
+    const couches = ProjectUtils.mapLayers(qgisProject);
+    const ids = [];
+    for (const id in couches) {
+      const l = couches[id];
+      if (l && typeof l.customProperty === "function" && String(l.customProperty("vision/cache", "")) === "onf"
+          && String(l.customProperty("vision/origine", "")) === "plugin") ids.push(String(l.id));
+    }
+    for (let i = 0; i < ids.length; i++) ProjectUtils.removeMapLayer(qgisProject, ids[i]);
+  }
+
+  // Ligne du panneau (« Cache ONF du … »), '' sans cache.
+  function cacheLigne() {
+    const id = visionId();
+    return id ? Logique.cacheLignePanneau(Logique.lireRegistre(reglages, id)) : "";
+  }
+
+  // Emprise visible en EPSG:2154 : les quatre coins de l'écran (carte tournée), par mapSettings.screenToCoordinate
+  // (qgsquickmapsettings.h l. 236, Q_INVOKABLE, coordonnées de l'élément de carte), reprojetés si la carte n'est pas en
+  // EPSG:2154 (GeometryUtils.reprojectPoint). Repli : visibleExtent (l. 72). null si illisible.
+  function empriseCarteCache() {
+    const canvas = iface.mapCanvas();
+    const ms = canvas.mapSettings;
+    const crs = ms.destinationCrs;
+    const enLambert = String(crs.authid || "") === "EPSG:2154";
+    const but = CoordinateReferenceSystemUtils.fromDescription("EPSG:2154");
+    const vers2154 = function (x, y) {
+      if (enLambert) return { x: Number(x), y: Number(y) };
+      const p = GeometryUtils.reprojectPoint(GeometryUtils.point(Number(x), Number(y)), crs, but);
+      return { x: Number(p.x), y: Number(p.y) };
+    };
+    try {
+      const w = Number(canvas.width);
+      const h = Number(canvas.height);
+      if (w > 0 && h > 0) {
+        const coins = [[0, 0], [w, 0], [w, h], [0, h]].map(function (c) {
+          const p = ms.screenToCoordinate(Qt.point(c[0], c[1]));
+          return vers2154(p.x, p.y);
+        });
+        const e = Logique.cacheEmpriseDesPoints(coins);
+        if (e) return e;
+      }
+    } catch (e) { /* repli ci-dessous */ }
+    const r = ms.visibleExtent;
+    return Logique.cacheEmpriseDesPoints([vers2154(r.xMinimum, r.yMinimum), vers2154(r.xMaximum, r.yMinimum),
+      vers2154(r.xMaximum, r.yMaximum), vers2154(r.xMinimum, r.yMaximum)]);
+  }
+
+  // Bouton « Mettre en cache les couches ONF de cette zone ».
+  // Diagnostic de tout échec du cache (aller-retour 2/3, essai n° 1 sur le Samsung) : écrit dans
+  // vision-imports/_cache-onf/dernier-echec.txt (écrasé à chaque échec) et dans le journal de QField (console.log).
+  // d = { etape, couche, raison, exception, message, contexte, details } (Logique.cacheTexteDiagnostic). Ne lève jamais ;
+  // le texte affiché reste celui de la logique (textes validés).
+  function cacheDiagnostic(d) {
+    try {
+      const x = d || {};
+      x.date = new Date();
+      x.vision = versionPlugin;
+      x.qfield = versionQField();
+      const texte = Logique.cacheTexteDiagnostic(x);
+      console.log(texte);
+      const chemin = Logique.cacheCheminDiagnostic(dossierProjet());
+      if (chemin !== "" && !ecrireFichier(chemin, texte)) console.log("Vision, cache ONF : diagnostic non écrit dans " + chemin);
+    } catch (e) {
+      try { console.log("Vision, cache ONF : diagnostic impossible : " + e); } catch (x2) { /* rien */ }
+    }
+  }
+
+  function contexteCache(prep) {
+    return {
+      visionId: visionId(), dossierProjet: dossierProjet(),
+      horodatage: prep ? prep.horodatage : "", emprise: prep ? prep.emprise : null,
+      depart: prep ? { visionId: prep.visionId, dossierProjet: prep.dossierProjet } : null
+    };
+  }
+
+  function mettreEnCacheOnf() {
+    if (cacheEnCours) return;
+    let prep = null;
+    try {
+      let emprise = null;
+      let erreurEmprise = "";
+      try { emprise = empriseCarteCache(); } catch (e) { emprise = null; erreurEmprise = Logique.texteException(e); }
+      prep = Logique.cachePreparer({
+        visionId: visionId(), dossierProjet: dossierProjet(), emprise: emprise,
+        vraisemblance: Controles.EMPRISE_VRAISEMBLANCE, maintenant: function () { return new Date(); }
+      });
+      if (!prep.ok) {
+        cacheDiagnostic({ etape: "préparation", message: prep.message, exception: erreurEmprise,
+          contexte: { visionId: visionId(), dossierProjet: dossierProjet(), emprise: emprise } });
+        message(prep.message);
+        return;
+      }
+    } catch (e) {
+      cacheDiagnostic({ etape: "préparation (exception)", message: Logique.TEXTES_CACHE_ONF.echecLocal, exception: Logique.texteException(e), contexte: contexteCache(prep) });
+      message(Logique.TEXTES_CACHE_ONF.echecLocal);
+      return;
+    }
+    cacheEnCours = true;
+    message(textePendantCache);
+    cacheRequete(0, prep, {});
+  }
+
+  function cacheFin(texte) {
+    cacheEnCours = false;
+    message(texte);
+    registreChange();
+  }
+
+  // Une couche, puis la suivante ; toute exception termine proprement (cacheEnCours revient à faux, rien n'est inscrit).
+  function cacheRequete(i, prep, reponses) {
+    const couches = Logique.CACHE_ONF.couches;
+    let etape = "requête " + (i + 1);
+    try {
+      if (i >= couches.length) {
+        etape = "enregistrement";
+        const r = cacheEnregistrer(prep, reponses);
+        if (!r.ok) cacheDiagnostic({ etape: r.etape, raison: r.raison, message: r.message, contexte: contexteCache(prep), details: r.details });
+        cacheFin(r.message);
+        return;
+      }
+      const couche = couches[i].couche;
+      const url = Logique.cacheUrlGetFeature(couche, prep.emprise);
+      let fini = false;
+      const req = iface.createHttpRequest();
+      const suite = function (statut, texte, erreur) {
+        if (fini) return;
+        fini = true;
+        Qt.callLater(function () { cacheReponse(i, prep, reponses, couche, { statut: statut, texte: texte, erreur: erreur, url: url }); });
+      };
+      req.timeout = 120000;
+      req.onload = function () { suite(Number(req.status), String(req.responseText || ""), ""); };
+      req.onerror = function (code, texte) { suite(Number(req.status), "", "erreur réseau " + code + " : " + texte); };
+      req.ontimeout = function () { suite(0, "", "délai dépassé"); };
+      req.onaborted = function () { suite(0, "", "requête annulée"); };
+      req.open("GET", url);
+      req.send();
+    } catch (e) {
+      cacheDiagnostic({ etape: etape + " (exception)", couche: i < couches.length ? couches[i].couche : "", message: Logique.TEXTES_CACHE_ONF.echecLocal,
+        exception: Logique.texteException(e), contexte: contexteCache(prep) });
+      cacheFin(Logique.TEXTES_CACHE_ONF.echecLocal);
+    }
+  }
+
+  function cacheReponse(i, prep, reponses, couche, r) {
+    try {
+      const j = Logique.cacheJugerReponse(couche, r);
+      if (!j.ok) {
+        cacheDiagnostic({ etape: "réponse jugée : " + j.refus, couche: couche, message: j.message, contexte: contexteCache(prep),
+          details: { url: r.url, statut: r.statut, erreur: r.erreur, nbObjets: j.nbObjets, longueur: String(r.texte || "").length,
+            analyse: Logique.cacheAnalyserReponse(r.texte), extrait: Logique.extraitReponse(r.texte, 300) } });
+        cacheFin(j.message);
+        return;
+      }
+      reponses[couche] = { texte: r.texte, nbObjets: j.nbObjets };
+    } catch (e) {
+      cacheDiagnostic({ etape: "réponse (exception)", couche: couche, message: Logique.TEXTES_CACHE_ONF.echecLocal,
+        exception: Logique.texteException(e), contexte: contexteCache(prep) });
+      cacheFin(Logique.TEXTES_CACHE_ONF.echecLocal);
+      return;
+    }
+    cacheRequete(i + 1, prep, reponses);
+  }
+
+  // Services communs à l'ouverture du projet et à l'enregistrement du cache (Logique.demarrerProjet, Logique.cacheEnregistrer).
+  // Mode groupe : renommer (platformUtilities.renameFile, QField qfplatformutilities.h l. 132 ; « overwrite » vrai comme à l'essai C4
+  // du 25 novembre 2026 sur le Samsung, pièce § 14 bis ; la logique ne renomme jamais vers un fichier existant), recharger
+  // (QgsMapLayer::reload, Q_INVOKABLE, puis triggerRepaint, slot : qgsmaplayer.h l. 556 et 1934), coucheDuGroupe.
+  // Mode ancien : retirerCacheDeLaCarte, ajouterCache.
+  function servicesCache() {
+    return {
+      ecrireFichier: ecrireFichier,
+      effacerFichier: effacerFichier,
+      existe: function (chemin) { return FileUtils.fileExists(chemin); },
+      ouvrirCouche: function (uri, nom) { return LayerUtils.loadVectorLayer(uri, nom); },
+      creerIterateur: function (l) { return LayerUtils.createFeatureIterator(l); },
+      // QgsMapLayer::crs : Q_PROPERTY en écriture (QGIS 3a92eb3 qgsmaplayer.h l. 90) ; saveVectorLayerAs l'écrit dans le GeoPackage
+      // (QField qflayerutils.cpp l. 712 : layer->crs()).
+      imposerSysteme: function (l) { l.crs = CoordinateReferenceSystemUtils.fromDescription("EPSG:2154"); },
+      reecrireCouche: reecrireCouche,
+      vraisemblance: Controles.EMPRISE_VRAISEMBLANCE,
+      maintenant: function () { return new Date(); },
+      coucheDuGroupe: coucheDuGroupe,
+      renommer: function (de, vers) { return !!platformUtilities.renameFile(de, vers, true); },
+      recharger: function (l) { l.reload(); l.triggerRepaint(); },
+      retirerCacheDeLaCarte: retirerCacheDeLaCarte,
+      ajouterCache: ajouterCache
+    };
+  }
+
+  function cacheEnregistrer(prep, reponses) {
+    return Logique.cacheEnregistrer(Object.assign({
+      visionId: visionId(),
+      dossierProjet: dossierProjet(),
+      reglages: reglages,
+      horodatage: prep.horodatage,
+      date: prep.date,
+      // Garde : le projet ouvert doit être celui du bouton (comme zipRecu).
+      depart: { visionId: prep.visionId, dossierProjet: prep.dossierProjet },
+      emprise: prep.emprise,
+      reponses: reponses,
+      styles: StylesOnf.STYLES_ONF
+    }, servicesCache()));
+  }
+  // ==== cache ONF : fin
 }

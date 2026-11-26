@@ -263,9 +263,9 @@ test('Vision.qml importe la bibliothèque et la passe à importerZip ; elle ne l
   assert.ok(!/plugin\/styles|resolvedUrl\("styles/.test(qml));
 });
 
-test('version 0.6.0 (constante, metadata.txt) et préversion : branche de la mission 052 dans release-plugin.yml (la 050 reste)', () => {
-  assert.equal(L.VERSION, '0.6.0');
-  assert.match(lire('plugin/metadata.txt'), /^version=0\.6\.0$/m);
+test('version 0.7.0 (constante, metadata.txt) et préversion : branche de la mission 052 dans release-plugin.yml (la 050 reste)', () => {
+  assert.equal(L.VERSION, '0.7.0');
+  assert.match(lire('plugin/metadata.txt'), /^version=0\.7\.0$/m);
   const wf = lire('.github/workflows/release-plugin.yml');
   assert.match(wf, /'mission\/052-styles-modeles'/);
   assert.match(wf, /'mission\/050-vision'/);

@@ -1,0 +1,2 @@
+Date : 2026-11-25T19:38:09.610Z ; Vision 0.7.0 ; QField v4.3.8
+Sonde C4 : couche de sonde déjà sur la carte : la retirer d'abord.

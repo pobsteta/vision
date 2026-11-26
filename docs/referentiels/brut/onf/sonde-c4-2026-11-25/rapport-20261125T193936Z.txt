@@ -1,0 +1,6 @@
+Date : 2026-11-25T19:39:36.849Z ; Vision 0.7.0 ; QField v4.3.8
+Sonde C4 (outil d'essai, textes provisoires) : préparation
+vide : valide, 0 objet, WKB 1, système EPSG:2154 (/storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision/vision-imports/_sonde-c4/vide/SONDE_C4.gpkg)
+A (actuel) : valide, 2 objets, WKB 1, système EPSG:2154 (/storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision/vision-imports/_sonde-c4/actuel/SONDE_C4.gpkg)
+couche de sonde ajoutée à la carte : « Sonde C4 (essai) »
+annexes de A après ouverture : -wal : absent, -shm : absent

@@ -1,0 +1,10 @@
+Date : 2026-11-25T19:38:48.915Z ; Vision 0.7.0 ; QField v4.3.8
+Sonde C4 (outil d'essai, textes provisoires) : bascule et relecture
+B : 3 objets écrits (/storage/emulated/0/Android/data/ch.opengis.qfield/files/Imported Projects/projet-vision/vision-imports/_sonde-c4/b/SONDE_C4.gpkg) ; couche affichée avant : 2 objets
+avant la bascule : -wal : absent, -shm : absent
+bascule : renommages réussis, couche affichée relue : 3 objets (attendu 3), 9 ms
+couche après bascule : valide, 3 objets, WKB 1, système EPSG:2154
+après la bascule : -wal : absent, -shm : absent
+retour arrière : renommages réussis, couche relue : 2 objets (attendu 2)
+après le retour arrière : -wal : absent, -shm : absent
+VERDICT : bascule par renommage puis reload() PROUVÉE (3 objets, puis 2 au retour)

@@ -50,13 +50,13 @@ _Modèle de carte :_
 
 ## Planifié
 
-- [053-couches-onf-wfs](missions/053-couches-onf-wfs.md) · depuis le cycle 6 · **validée par Pascal le 25 novembre 2026** ; étape 1 (mesure) confiée au dev
-  - Homme : `dev` (étape 1 mesure, étape 2 projet modèle), puis `relecteur`
-  - Mission : forêts, parcelles et points de rencontre des secours ONF (WFS + copie locale) dans vision.qgz, aux styles de Pascal
-  - Moyens : GetCapabilities et .qml dans `docs/referentiels/brut/onf/`, GitHub Actions pour joindre le service (http)
 
 ## Terminé
 
+- [053-couches-onf-wfs](missions/053-couches-onf-wfs.md) · depuis le cycle 6 · fusionnée (PR #60, 26 novembre 2026), plugin 0.7.0 ; question ouverte : registre partagé entre projets Vision (spec § 11 n° 12)
+  - Homme : `dev` (étapes 1 à 2), `archiviste` (spec, README, référentiels), puis `relecteur`
+  - Mission : forêts publiques, parcelles forestières et points de rencontre des secours de l'ONF dans `vision.qgz` : cache de zone sur le mobile, groupe « ONF Cache » à chemins fixes (ADR 0010 amendée le 26 novembre 2026 ; le WFS du projet et la copie nationale sont abandonnés), aux styles de Pascal adaptés aux champs réels
+  - Moyens : GetCapabilities, .qml et mesure dans `docs/referentiels/brut/onf/`, GitHub Actions pour joindre le service (http), Samsung de Pascal pour les essais
 - [052-styles-modeles](missions/052-styles-modeles.md) · depuis le bilan n° 1 · fusionnée (PR #57)
   - Homme : `dev`
 - [030-prototype-4-tables](missions/030-prototype-4-tables.md) · depuis le cycle 6 · **close par Pascal le 6 novembre 2026** ; prototype n° 4 (cbd1f1f, branche `mission/023-prototype-2`, non fusionnée), voie reprise par la 024 ; essai propre non rapporté

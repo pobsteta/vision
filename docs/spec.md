@@ -24,6 +24,10 @@ Un seul projet `vision.qgz` par appareil, pour toutes les forêts de l'agent (§
 | 7 | Retirer une couche, depuis le panneau du plugin (ou le menu de la couche, si QField le permet à un plugin). | Retire la couche de la carte et du registre. La copie du zip est effacée quand plus aucune couche ne s'en sert **si QField le permet** ; sinon elle reste et son nom est affiché (§ 9, n° 2). | non |
 | 8 | Fermer, rouvrir le projet, ou redémarrer l'appareil. | Étape 2 : tout revient. | non |
 
+*Ajout du 25 novembre 2026 (mission 053, ADR 0010)* : avant de partir, **avec réseau**, l'agent peut mettre en cache les couches
+ONF (forêts, parcelles, points de rencontre des secours) de la zone du jour par un bouton du panneau ; sans réseau, ce cache
+revient à l'ouverture comme les couches des zips. Détail : § 3.6.
+
 Contraintes de geste : gants et soleil. Boutons d'au moins 9 mm de côté, textes
 contrastés, pas de geste fin (valeur à confirmer sur l'appareil par l'`afficheur`).
 Le plugin n'affiche pas son bouton hors d'un projet Vision.
@@ -134,6 +138,25 @@ Ces référentiels sont à rassembler par l'`acquereur` (§ 8).
     la couche réécrite. Les GeoTIFF restent lus dans le zip, style par défaut.
   - **Retrait** : efface aussi les `.gpkg`, `.qml` et annexes (`-wal`, `-shm`, `.aux.xml`) de
     la couche, toujours et seulement dans `vision-imports/` (ADR 0007 amendée).
+- **Cache de zone ONF (mission 053, plugin 0.7.0, 25 et 26 novembre 2026 ; § 3.6, ADR 0010 amendée, forme R2 de
+  `docs/referentiels/cache-zone-qfield.md` § 4)** :
+  - **Entrée au registre** : même clé `vision/<vision_id>`, une entrée par couche du cache, de **sorte « cache »** :
+    `{ cache: "onf", couche, chemin: "<horodatage>/<couche>.gpkg" (**mode groupe : `actuel/<couche>.gpkg`**), emprise, date (ISO), objets }`, sans `zip`. La clé d'une entrée est
+    (sorte, zip, couche) : une entrée de zip n'a pas de `cache`, les deux ne se confondent jamais. Le `chemin` est relatif à
+    `vision-imports/_cache-onf/`. Une entrée de cache non saine est retirée du registre sans effacer de fichier ; un registre
+    illisible fait refuser le cache (il n'est jamais remplacé).
+  - **Dossier réservé** : `vision-imports/_cache-onf/<AAAAMMJJTHHMMSSZ>/` (génération de travail) et, en **mode groupe** (§ 3.6),
+    `vision-imports/_cache-onf/actuel/` (trois GeoPackage à noms fixes, lus par les couches du groupe « ONF Cache » de `vision.qgz`) ; les fichiers de
+    la génération et les sauvegardes `.avant.gpkg` sont effacés une fois le cache inscrit, le dossier de génération reste, vide. Le plugin n'écrit ni n'efface dans ce dossier que des fichiers à ses noms
+    (`<couche>.gml|.gfs|.gpkg|.qml`) ; `dernier-echec.txt` y est écrasé à chaque échec du cache (diagnostic).
+  - **Nom réservé** : un zip nommé **`_cache-onf.zip`** (casse ignorée) est refusé : « `_cache-onf.zip` : nom réservé par Vision
+    (cache ONF), rien n'est importé. » (texte validé par Pascal, fiche 053).
+  - **Marques** de couche : `vision/cache` = `onf` et `vision/couche` ; le plugin retrouve le cache par ces marques (repli : l'identifiant `ONF_Cache_<couche>_…`), jamais par le
+    nom.
+  - **Registre partagé** : la clé `vision/<vision_id>` est commune à tous les projets Vision d'un appareil (constaté à l'essai du 26 novembre 2026) ;
+    voir § 3.6 et § 11 n° 12.
+  - **Limites connues** : dossiers de génération vides laissés sur l'appareil (aucune fonction d'effacement de dossier exposée ; acceptée par Pascal, 26 novembre 2026) ; une
+    version plus ancienne du plugin (< 0.7.0) retirerait les entrées du cache du registre (« douteuses ») sans effacer les fichiers.
 - **QField désinstallé ou appareil perdu** : registre et copies disparaissent. Accepté :
   les couches sont en lecture seule, le zip d'origine reste chez JFC.
 
@@ -232,6 +255,71 @@ autres sont décochés. Le **cadastre est au-dessus de tous les fonds** et visib
   **Décision de Pascal du 4 novembre 2026** (mission 028, `pilotage/journal.md`) : la mise à
   jour du projet se fait par **copie de `vision.qgz` à la main** (câble USB), à partir de
   `projet-vision-mise-a-jour.zip`, sans flashcode.
+
+### 3.6 Couches ONF : cache de zone et groupe « ONF Cache » (mission 053, ADR 0010 amendée le 26 novembre 2026)
+
+> Source des décisions : [`docs/adr/0010-couches-onf-wfs-et-cache-de-zone.md`](adr/0010-couches-onf-wfs-et-cache-de-zone.md)
+> (acceptée le 25 novembre 2026, **amendée le 26 novembre 2026** : WFS retiré, groupe « ONF Cache »). Textes affichés validés mot pour mot : fiche
+> [`pilotage/missions/053-couches-onf-wfs.md`](../pilotage/missions/053-couches-onf-wfs.md) ; ils ne sont **pas recopiés ici**. Le code les porte dans
+> `TEXTES_CACHE_ONF` (`plugin/vision-logique.mjs`), relus dans la fiche par un test. Preuves, lignes de code lues et protocoles d'essai :
+> [`docs/referentiels/cache-zone-qfield.md`](referentiels/cache-zone-qfield.md) (§§ 14, 15, 15 bis). Le service et sa mesure :
+> [`docs/referentiels/onf-wfs.md`](referentiels/onf-wfs.md).
+
+- **Service** : `http://ws.carmencarto.fr/WFS/105/ONF_Forets` (MapServer 7.0.0, **http seulement**), trois couches de métropole en EPSG:2154 :
+  `FOR_PUBL_FR` (forêts publiques), `PARC_PUBL_FR` (parcelles forestières), `PRS_FR` (points de rencontre des secours). `DT_FR`, `ATE_FR` et
+  `RB_FR` ne sont pas utilisées. **`vision.qgz` ne contient aucune couche WFS** (Pascal, 26 novembre 2026 : hors réseau, elles donnaient la page
+  « Impossible de charger certaines couches ») ; seul le plugin interroge le service, en `GetFeature` WFS **1.0.0** (version prouvée sur le Samsung).
+  Un ancien `vision.qgz` garde son groupe « ONF » WFS tant qu'il n'est pas remplacé.
+- **Groupe « ONF Cache » de `vision.qgz`** (sous « Saisie terrain », au-dessus de « Fonds de carte ») : trois couches `ogr` à **chemins fixes**
+  `vision-imports/_cache-onf/actuel/<couche>.gpkg` (`FOR_PUBL_FR`, `PARC_PUBL_FR`, `PRS_FR`), nommées « Forêts publiques (© ONF) », « Parcelles
+  forestières (© ONF) », « Points de secours (© ONF) », lecture seule, marques `vision/cache=onf` et `vision/couche`, groupe coché. Seuils : parcelles
+  et points visibles en deçà du **1:50 000** ; **forêts à toutes les échelles** (Pascal, 26 novembre 2026). Réglages : `outils/projet-modele.mjs`.
+- **GeoPackage vides** : `projet-vision.zip` (première installation) en contient trois, vides, aux champs réels du service ; la mise à jour
+  (`projet-vision-mise-a-jour.zip`) reste `vision.qgz` seul (garde-fou testé). Le plugin crée ceux qui manquent à l'ouverture de tout projet Vision.
+- **Cache de zone** : bouton du panneau « Mettre en cache les couches ONF de cette zone ».
+  - **Zone** : l'emprise visible de la carte (quatre coins, carte tournée comprise), reprojetée en EPSG:2154. **Plafonds (Pascal, 25 novembre 2026)** :
+    **20 km de côté au plus** (`coteMax`) et **5 000 objets par couche au plus** (`objetsMax`) ; au-delà, refus avec demande de zoomer, jamais de zone
+    rognée. Une emprise hors de France métropolitaine ou illisible est refusée.
+  - **Requêtes** : `GetFeature` + `BBOX`, `MAXFEATURES` = plafond + 1, par couche. **Contrôle de complétude obligatoire** : fin de collection
+    présente, aucune exception, UTF-8, nombre d'objets ≤ 5 000.
+  - **Génération puis bascule** : GML écrit dans `vision-imports/_cache-onf/<horodatage>/`, lu avec un schéma `.gfs` (EPSG:2154 et type de
+    géométrie imposés : MultiPolygon pour forêts et parcelles, Point pour les points), réécrit en GeoPackage. En **mode groupe**, la **bascule par
+    renommage** met chaque `actuel/<couche>.gpkg` de côté (`.avant.gpkg`) et y place le nouveau, puis `reload()` ; le plugin contrôle ce que la couche
+    affiche, et au moindre écart rétablit l'ancien par renommages inverses (texte d'échec validé). Aucune couche n'est ajoutée ni retirée de la carte.
+  - **Une seule zone, tout ou rien** : un nouveau cache remplace le précédent seulement si les trois couches passent tous les contrôles ; sinon
+    l'ancien reste affiché. **Retour arrière incomplet** : le registre est vidé des entrées du cache, une note de reprise est gardée ; à l'ouverture
+    suivante les sauvegardes `.avant.gpkg` sont remises à `actuel/` avant toute création de fichier vide, et « Cache ONF illisible… » le dit.
+  - **Couche du projet invalide au moment du bouton** (fichier absent créé à l'instant, fichier illisible) : le cache est posé à `actuel/` et le texte
+    validé « Cache ONF prêt : fermez puis rouvrez le projet pour l'afficher. » le dit ; la couche invalide le lit à la réouverture (**essayé sur le
+    Samsung le 26 novembre 2026, point B du temps 4**).
+  - **Mode ancien** (ancien `vision.qgz`, ou une couche du groupe manquante) : comportement du 25 novembre 2026, couches **en tête de liste** (un plugin
+    ne peut pas ranger une couche dans un groupe), style écrit en `.qml` voisin. **Migration** : à la première ouverture du nouveau `vision.qgz`, un cache
+    en génération est basculé vers `actuel/` (essai 6c, réussi).
+  - **Réouverture** : le cache revient sans réseau, depuis `actuel/` et le registre. La ligne « Cache ONF du JJ/MM/AAAA : … » du panneau donne la date et
+    les nombres. Une couche du cache illisible : texte validé, le cache n'est pas affiché ; le refaire avec réseau.
+- **Mise à jour d'un appareil en service (consigne, Pascal, 26 novembre 2026)** : (1) **plugin** d'abord ; (2) **ouvrir le projet une fois** (le
+  plugin crée les trois GeoPackage vides) ; (3) **copier le nouveau `vision.qgz`** ; (4) ouvrir le projet (le cache existant est migré) et **cocher
+  « ONF Cache »** dans la légende : QField réapplique par-dessus le `.qgz` l'état de légende gardé par chemin de projet (`QfProjectInfo`,
+  `qfprojectinfo.cpp` l. 256-277 et 587-601, QField 4.3.8), les nouveaux groupes y sont décochés ; aucune correction possible côté `.qgz`. Dans un autre
+  ordre : page « Impossible de charger certaines couches » une fois, couches invalides jusqu'à la réouverture.
+- **Styles** : ceux de Pascal (`RDF_FRT`, `RDF_Parc`, `Point_de_rencontre_des_secours_en_frt`), **adaptés aux champs réels du service** par génération
+  (`plugin/vision-styles-onf.mjs`) : forêts étiquetées par `iidtn_frt`, parcelles par `ccod_prf`, formulaire des points sur ses vrais champs. Les `.qml`
+  d'origine restent intacts dans `docs/referentiels/brut/onf/`. La bibliothèque `plugin/styles/` n'est pas touchée.
+- **Attribution** « © ONF » : dans le nom des trois couches (le plugin ne peut pas poser les droits d'une couche, `cache-zone-qfield.md` § 12) et dans
+  `<rights>` des couches de `vision.qgz`.
+- **Licence** : accord de l'ONF **rapporté par Pascal, sans pièce écrite** (décision du 25 novembre 2026). Licence des fiches de métadonnées : non lue.
+- **Le cache n'est pas un zip** : son entrée au registre et le nom réservé `_cache-onf.zip` sont au § 3.3. **Aucune clé ; aucune couche de l'ONF dans
+  le dépôt** : seules des pièces d'essai (captures, GetCapabilities, comptes rendus) y sont versées.
+- **Limites acceptées (Pascal, 26 novembre 2026)** : un **dossier de génération vide** reste à chaque cache (aucune fonction d'effacement de dossier
+  exposée) ; en **mode ancien**, les **styles du cache peuvent manquer** (essai 6a ; limite transitoire, réparée par la copie du nouveau `vision.qgz` ;
+  cause non cherchée) et l'ordre des trois couches y est celui d'`addMapLayer` ; après une mise à jour, « ONF Cache » est décoché (consigne ci-dessus) ;
+  un retour à l'ancien `vision.qgz` après le passage au groupe laisse les couches sans style.
+- **Contradiction constatée à l'essai (registre partagé)** : le registre est clé par `vision_id`. Deux projets Vision sur un même appareil (cas de
+  l'essai : `projet-vision`, `_1`, `_2`) **partagent donc le registre** : le panneau du projet neuf listait six couches du zip de l'ancien projet, et
+  le cache de l'un remplace celui de l'autre. C'est contraire à la règle « un seul `vision.qgz` par appareil » (§ 3.3) : la règle est tenue par
+  consigne, rien dans le code ne l'impose. Voir § 11 n° 12.
+- **Non prouvé à ce jour** : les flèches SVG (`arrows/Arrow_01.svg`) du style des points ; la tenue d'une zone proche des plafonds (20 km, 5 000
+  objets). **Limite acceptée, non diagnostiquée, aucun essai attendu** (Pascal, 26 novembre 2026) : styles du cache absents en mode ancien (point C du temps 4). Voir § 11 n° 10.
 
 ## 4. Contrôles à l'import (ADR 0004)
 
@@ -568,3 +656,19 @@ autres résultats (Q2 à Q4) tiennent.
    décisions mais des résultats attendus de Pascal.
 8. **Réponses attendues de JFC** (voir `docs/brief.md`, « À fournir avant la spec ») : Serre_EA2026, champs `CODE_UG`,
    `CODE_PARC`, `CODE_FRT`, licence SCAN 25, licence du fond IGN embarqué.
+9. **Libération des couches de travail (mission 053, 25 novembre 2026)** : QML ne peut ni `deleteLater()` ni `destroy()` une
+   couche ouverte par le plugin (Qt 6.10.3 cache `deleteLater` à QML, `destroy()` refuse un objet en `CppOwnership` :
+   `docs/referentiels/cache-zone-qfield.md` § 10). Les couches de travail du cache (GML ouverts) et celles des imports de zip ne sont
+   donc jamais libérées avant la fermeture de QField : fuite de mémoire bornée. Cela touche aussi la mission 049 (« fuite des
+   couches »), sans effet sur l'appareil. **Mission à proposer à Pascal** (seule voie lue : `addMapLayer` puis `removeMapLayer`, non
+   essayée). *À trancher par Pascal.*
+10. **Couches ONF : essais restants (mission 053)** : flèches SVG du style des points, tenue d'une zone proche des plafonds (20 km, 5 000
+    objets), fond embarqué qui peut passer au-dessus du cache en mode ancien
+    (§ 3.4). Résultats attendus de Pascal. *Closes le 26 novembre 2026 : `.qml` voisin du cache en mode ancien (point C du temps 4 : accepté, transitoire, sans recherche de plus, Pascal) ; affichage des couches WFS du projet (WFS retiré) ; rangement du cache dans
+    un groupe (voie C4 prouvée, groupe « ONF Cache ») ; seuil des forêts du cache (toutes échelles) ; double affichage cache + WFS (sans objet).*
+11. **Annulation du cache** : le cache n'a pas de bouton d'annulation (texte non validé) ; l'écran reste figé le temps de
+    l'écriture (quelques secondes). *À trancher par Pascal si cela gêne.*
+12. **Registre partagé entre projets Vision d'un appareil (mission 053, 26 novembre 2026)** : deux projets Vision sur un même appareil partagent le
+    registre (`vision_id` identique) : couches de zips d'un projet listées dans l'autre, cache de l'un remplacé par celui de l'autre. Contraire à la
+    règle « un seul `vision.qgz` par appareil » (§ 3.3), tenue par consigne seulement. Imposer la règle dans le code, ou changer de clé ? *À trancher
+    par Pascal.*
