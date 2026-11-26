@@ -10,7 +10,7 @@
 > ont été reprises une à une contre le journal et les fiches ; la source qui justifie la colonne est écrite sur
 > chaque carte concernée. Les questions ouvertes sont rangées dans `docs/spec.md` § 11.
 
-**Dernier cycle :** 6 _(augmenté de 1 à la fin de chaque `/boucle`, même quand elle n'a
+**Dernier cycle :** 7 _(augmenté de 1 à la fin de chaque `/boucle`, même quand elle n'a
 rien lancé. Une carte est immobile quand dernier cycle − N ≥ 2.)_
 
 _Modèle de carte :_
@@ -35,14 +35,14 @@ _Modèle de carte :_
   - Homme : `testeur` (sonnet)
   - Mission : Tests du registre complet — cycle prévu 5
   - Moyens : `docs/spec.md` § 3.3, § 9 
-- [014-registre](missions/014-registre.md) · depuis le cycle 0 ; **tranchée par Pascal le 26 novembre 2026** : dossier vide effacé, dossier entier remplacé au réimport (preuve avant code : un plugin sait-il effacer un dossier ? cf. 053) ; fiche reprise le 26 novembre, **à valider par Pascal**
+- [014-registre](missions/014-registre.md) · depuis le cycle 7 · réalisée, relue « prête », **PR #65 à fusionner après la #64** (plugin 0.9.0) ; **tranchée par Pascal le 26 novembre 2026** : dossier vide effacé, dossier entier remplacé au réimport (preuve avant code : un plugin sait-il effacer un dossier ? cf. 053) ; fiche reprise le 26 novembre, **à valider par Pascal**
   - Homme : `dev` (sonnet)
   - Mission : Registre complet — cycle prévu 6
   - Moyens : `docs/spec.md` § 3.3, ADR 0003
 
 ## Planifié
 
-- [055-rappel-hors-ligne](missions/055-rappel-hors-ligne.md) · depuis le cycle 6 · **proposée le 26 novembre 2026, à valider par Pascal** (porte n° 2)
+- [055-rappel-hors-ligne](missions/055-rappel-hors-ligne.md) · depuis le cycle 7 · validée et réalisée, relue « prête », **PR #64 à essayer sur le Samsung et à fusionner par Pascal** (plugin 0.8.0)
   - Homme : `dev` (proposition du texte, puis réalisation), puis `relecteur`
   - Mission : rappeler à l'agent, avant le terrain, de préparer le hors-ligne (fonds IGN, cache ONF de la zone du jour)
   - Moyens : spec § 3.4, § 3.6, critère 5 de la recette ; texte validé par Pascal avant tout code
