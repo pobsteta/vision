@@ -348,6 +348,8 @@ Item {
     }, servicesCache()));
     if (r && r.cache && r.cache.notes) {
       for (let i = 0; i < r.cache.notes.length; i++) console.log("Vision, cache ONF : " + r.cache.notes[i]);
+      // Dit aussi dans dernier-echec.txt (migration ou reprise manquée, fichier non créé).
+      if (r.cache.notes.length > 0) cacheDiagnostic({ etape: "ouverture du projet", message: r.message, contexte: contexteCache(null), details: { notes: r.cache.notes.join(" | ") } });
     }
     registreChange();
     return r;
@@ -498,6 +500,8 @@ Item {
     for (const id in couches) {
       const l = couches[id];
       if (!l || typeof l.customProperty !== "function") continue;
+      // Mode ancien : jamais une couche du groupe du projet (elle n'a pas la marque d'origine du plugin).
+      if (String(l.customProperty("vision/origine", "")) !== "plugin") continue;
       if (String(l.customProperty("vision/cache", "")) === "onf" && String(l.customProperty("vision/couche", "")) === nomCouche) return l;
     }
     return null;

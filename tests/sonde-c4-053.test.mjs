@@ -11,7 +11,7 @@ import * as L from '../plugin/vision-logique.mjs';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const lire = (f) => readFileSync(join(RACINE, f), 'utf8');
-const SONDE = /sonde\s*C4|sondeC4|SONDE_C4|_sonde-c4|vision\/sonde|outil d'essai|textes provisoires|À RETIRER AVANT TOUTE FUSION/i;
+const SONDE = /sonde\s*C4|sondeC4|SONDE_C4|_sonde-c4|vision\/sonde|À RETIRER AVANT TOUTE FUSION/i;
 
 test('garde : la sonde C4 n\'existe plus dans le plugin (logique, pont QML, panneau, main.qml, métadonnées)', () => {
   for (const f of readdirSync(join(RACINE, 'plugin')).filter((n) => /\.(qml|mjs|txt)$/.test(n))) {

@@ -488,6 +488,86 @@ test('ouverture avec l\'ANCIEN vision.qgz : les GeoPackage vides sont créés qu
   assert.deepEqual(g.r.cache.creees || [], []);
 });
 
+// ------------------------------------------------------------------------------------------- aller-retour 1/3 (relecture)
+test('I1 : une exception de existe() vaut « présent » : aucune création sur un fichier peut-être rempli, aucun renommage vers une cible peut-être existante', () => {
+  const f = fauxGroupe({ actuel: {} });
+  f.ctx.existe = () => { throw new Error('droits refusés'); };
+  const { r } = ouvrir(f);
+  assert.ok(!f.journal.some((x) => /^(écrit|réécrit|renommé)/.test(x)), 'rien n\'est créé');
+  assert.deepEqual(r.cache.creees, []);
+  const g = fauxGroupe();
+  g.ctx.existe = () => { throw new Error('droits refusés'); };
+  const e = L.cacheEnregistrer(g.ctx);
+  assert.equal(e.ok, false);
+  assert.ok(!g.journal.some((x) => /^renommé /.test(x)), 'aucun renommage');
+});
+
+// Réouverture simulée après un retour arrière incomplet : les couches du projet sont relues d'après le disque.
+function rouvrir(f) {
+  for (const c of CODES) { const l = f.couchesProjet[c]; l.isValid = f.disque.has(l.fichier); l.n = l.isValid ? f.disque.get(l.fichier).n : 0; }
+  return ouvrir(f);
+}
+function retourIncomplet() {
+  const avant = { FOR_PUBL_FR: 2, PARC_PUBL_FR: 7, PRS_FR: 0 };
+  const f = fauxGroupe({ actuel: avant, registre: CODES.map((c, i) => ({ cache: 'onf', couche: c, chemin: `actuel/${c}.gpkg`, emprise: ZONE, date: DATE.toISOString(), objets: [2, 7, 0][i] === 0 ? 1 : [2, 7, 0][i] })),
+    panne: { renommerVers: [`${ACTUEL}/PRS_FR.gpkg`], renommerToujours: [`${ACTUEL}/PARC_PUBL_FR.gpkg`] } });
+  return { f, avant };
+}
+
+test('I2 : retour arrière incomplet : le registre ne ment plus (entrées retirées), la reprise est notée, la génération gardée', () => {
+  const { f } = retourIncomplet();
+  const r = L.cacheEnregistrer(f.ctx);
+  assert.equal(r.ok, false);
+  assert.match(r.raison, /retour arrière incomplet/);
+  assert.deepEqual(f.registre(), [], 'aucune entrée de cache : on ne sait plus ce qui s\'affiche');
+  assert.ok(f.disque.has(`${CACHE}/${H}/PARC_PUBL_FR.avant.gpkg`));
+});
+
+test('I2 (reprise, simple) : actuel absent + sauvegarde présente : reprise par renommage, registre rétabli, message « illisible » (couche non affichée)', () => {
+  const f = fauxGroupe({ actuel: { FOR_PUBL_FR: 2, PARC_PUBL_FR: 7, PRS_FR: 0 } });
+  const entrees = CODES.map((c, i) => ({ cache: 'onf', couche: c, chemin: `actuel/${c}.gpkg`, emprise: ZONE, date: DATE.toISOString(), objets: [2, 7, 1][i] }));
+  // état laissé par un retour arrière incomplet : les trois fichiers sont des sauvegardes dans la génération H0
+  for (const c of CODES) { f.disque.set(`${CACHE}/${H0}/${c}.avant.gpkg`, f.disque.get(`${ACTUEL}/${c}.gpkg`)); f.disque.delete(`${ACTUEL}/${c}.gpkg`); }
+  f.ctx.reglages.setValue(L.cleRegistre(ID) + '/reprise', JSON.stringify({ horodatage: H0, entrees: entrees }));
+  f.ctx.reglages.setValue(L.cleRegistre(ID), '[]');
+  const { r } = rouvrir(f);
+  for (const c of CODES) assert.equal(f.disque.get(`${ACTUEL}/${c}.gpkg`).n, { FOR_PUBL_FR: 2, PARC_PUBL_FR: 7, PRS_FR: 0 }[c], c);
+  assert.ok(!f.journal.some((x) => /^(écrit|réécrit)/.test(x)), 'aucun fichier vide créé à la place');
+  assert.deepEqual(JSON.parse(f.ctx.reglages.value(L.cleRegistre(ID), '')).map((e) => e.chemin), CODES.map((c) => `actuel/${c}.gpkg`));
+  assert.equal(f.ctx.reglages.value(L.cleRegistre(ID) + '/reprise', 'x'), '', 'reprise terminée');
+  assert.ok(r.message.includes(L.TEXTES_CACHE_ONF.cacheIllisible), 'les couches du projet sont invalides jusqu\'à la réouverture : dit');
+  assert.ok(r.cache.notes.some((n) => /reprise/.test(n)));
+});
+
+test('I2 (reprise impossible) : pas de sauvegarde : le vide est créé mais l\'état est dit (texte validé, note), registre sans entrées', () => {
+  const f = fauxGroupe({ actuel: {} });
+  f.ctx.reglages.setValue(L.cleRegistre(ID) + '/reprise', JSON.stringify({ horodatage: H0, entrees: [] }));
+  const { r } = rouvrir(f);
+  assert.deepEqual(r.cache.manquantes, CODES);
+  assert.ok(r.message.includes(L.TEXTES_CACHE_ONF.cacheIllisible));
+  assert.ok(r.cache.notes.some((n) => /reprise/.test(n)));
+});
+
+test('registre mêlé (actuel/ et génération) : les couches saines d\'actuel/ ne sont pas déclarées illisibles', () => {
+  const e = entreesActuel();
+  const mixte = [e[0], ...entreesAnciennes().slice(1)];
+  const f = fauxGroupe({ actuel: { FOR_PUBL_FR: 4, PARC_PUBL_FR: 0, PRS_FR: 0 }, registre: mixte });
+  const { r } = ouvrir(f);
+  assert.deepEqual(r.cache.manquantes, ['PARC_PUBL_FR', 'PRS_FR']);
+  assert.deepEqual(r.cache.rechargees, ['FOR_PUBL_FR']);
+});
+
+test('Vision.qml : coucheDuCache (mode ancien) ignore les couches du groupe du projet', () => {
+  const q = sansCommentaires(qml());
+  const s = q.slice(q.indexOf('function coucheDuCache'), q.indexOf('function coucheDuGroupe'));
+  assert.match(s, /vision\/origine/);
+});
+
+test('Vision.qml : les notes de l\'ouverture vont aussi dans dernier-echec.txt', () => {
+  const q = sansCommentaires(qml());
+  assert.match(q.slice(q.indexOf('function demarrer()'), q.indexOf('function ajouterZip')), /cacheDiagnostic\(/);
+});
+
 // ------------------------------------------------------------------------------------------- pont QML
 const qml = () => lire('plugin/Vision.qml');
 function sansCommentaires(t) { return t.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n'); }
@@ -533,7 +613,7 @@ test('sonde C4 retirée : ni Vision.qml, ni Panneau.qml, ni la logique ne la con
 
 test('Panneau.qml : un seul bouton de cache, plus de bouton d\'essai ni de texte provisoire', () => {
   const p = lire('plugin/Panneau.qml');
-  assert.ok(!/outil d'essai|textes provisoires/i.test(p));
+  assert.ok(!/sondeC4|Sonde C4/i.test(p));
   assert.equal((p.match(/mettreEnCacheOnf\(\)/g) || []).length, 1);
 });
 

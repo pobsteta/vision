@@ -1398,7 +1398,11 @@ export function demarrerProjet(ctx) {
   // Mission 053, étape 3 : si le projet porte les trois couches du groupe « ONF Cache », il les lit lui-même (chemin fixe) ; sinon
   // (ancien vision.qgz) les couches du cache sont rechargées en tête de liste, comme avant.
   const ctxCache = Object.assign({}, ctx, { visionId: visionId });
+  const reprise = reprendreBascule(ctxCache);
   const creation = creerCachesVides(ctxCache);
+  creation.notes = reprise.notes.concat(creation.notes);
+  creation.repriseIncomplete = reprise.ouverte && reprise.restaurees.length < CACHE_ONF.couches.length;
+  creation.repriseFaite = reprise.ouverte && reprise.restaurees.length === CACHE_ONF.couches.length;
   const groupe = groupeDuProjet(ctx);
   const cache = groupe ? demarrerGroupeCache(ctxCache, groupe, entreesCache, creation) : rechargerCacheOnf(ctx, dossier, entreesCache);
   if (!groupe && creation.creees.length > 0) cache.creees = creation.creees;
@@ -2015,8 +2019,64 @@ function groupeDuProjet(ctx) {
   return g;
 }
 
+// Une exception de existe() vaut « présent » : dans le doute, jamais d'écriture sur un fichier peut-être rempli ni de renommage vers
+// une cible peut-être existante (renameFile s'appelle avec « overwrite » vrai, comme à l'essai C4, et l'effacerait).
 function presentSur(ctx, chemin) {
-  try { return !!ctx.existe(chemin); } catch (e) { return false; }
+  try { return !!ctx.existe(chemin); } catch (e) { return true; }
+}
+
+// Renommage gardé : jamais hors des chemins du cache, jamais vers un fichier existant (ou peut-être existant).
+function renommerCache(ctx, de, vers) {
+  const dossierImports = dossierCopies(ctx.dossierProjet);
+  if (!peutRenommerCache(de, dossierImports) || !peutRenommerCache(vers, dossierImports) || presentSur(ctx, vers)) return false;
+  try { return ctx.renommer(de, vers) === true; } catch (e) { return false; }
+}
+
+// I2 : retour arrière incomplet. La reprise est notée dans les réglages (clé du registre + '/reprise') : génération qui porte les
+// sauvegardes .avant.gpkg et entrées du registre d'avant ; à l'ouverture suivante reprendreBascule remet les sauvegardes à actuel/.
+function cleReprise(visionId) {
+  return cleRegistre(visionId) + '/reprise';
+}
+
+function noterReprise(ctx, horodatage, entrees) {
+  try {
+    ctx.reglages.setValue(cleReprise(ctx.visionId), JSON.stringify({ horodatage: horodatage, entrees: entrees }));
+    // Le registre ne dit plus ce qui s'affiche : on ne le sait plus.
+    remplacerEntreesCache(ctx, []);
+  } catch (e) { /* le diagnostic de l'échec dit la raison */ }
+}
+
+// À l'ouverture, avant toute création de GeoPackage vide : reprend les sauvegardes d'une bascule dont le retour arrière a échoué.
+// Rend { ouverte, restaurees, notes }. `ouverte` : une reprise était notée ; elle est close (même incomplète : les notes la disent).
+function reprendreBascule(ctx) {
+  const r = { ouverte: false, restaurees: [], notes: [] };
+  let brut = '';
+  try { brut = ctx.reglages.value(cleReprise(ctx.visionId), ''); } catch (e) { brut = ''; }
+  if (brut === undefined || brut === null || brut === '') return r;
+  let m = null;
+  try { m = JSON.parse(String(brut)); } catch (e) { m = null; }
+  r.ouverte = true;
+  if (!m || !MOTIF_HORODATAGE.test(String(m.horodatage)) || typeof ctx.renommer !== 'function' || typeof ctx.existe !== 'function') {
+    r.notes.push('reprise : note illisible ou services absents');
+    try { ctx.reglages.setValue(cleReprise(ctx.visionId), ''); } catch (e) { /* sans effet */ }
+    return r;
+  }
+  for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+    const code = CACHE_ONF.couches[i].couche;
+    const p = cacheCheminsGroupe(ctx.dossierProjet, m.horodatage, code);
+    if (p === null) continue;
+    if (presentSur(ctx, p.actuel)) { r.notes.push('reprise : ' + code + ' : actuel présent' + (presentSur(ctx, p.sauvegarde) ? ' ET sauvegarde présente (' + p.sauvegarde + ')' : '')); continue; }
+    if (!presentSur(ctx, p.sauvegarde)) { r.notes.push('reprise : ' + code + ' : ni actuel ni sauvegarde'); continue; }
+    if (renommerCache(ctx, p.sauvegarde, p.actuel)) r.restaurees.push(code); else r.notes.push('reprise : ' + code + ' : renommage de la sauvegarde refusé');
+  }
+  if (r.restaurees.length === CACHE_ONF.couches.length) {
+    r.notes.push('reprise : les trois sauvegardes remises à actuel/ (couches du projet à relire : rouvrir le projet)');
+    try { if (Array.isArray(m.entrees) && m.entrees.length > 0) remplacerEntreesCache(ctx, m.entrees); } catch (e) { r.notes.push('reprise : registre non rétabli'); }
+  } else {
+    r.notes.push('reprise : incomplète, registre laissé sans entrées de cache');
+  }
+  try { ctx.reglages.setValue(cleReprise(ctx.visionId), ''); } catch (e) { /* sans effet */ }
+  return r;
 }
 
 // Bascule par renommage (§ 14.2), tout ou rien. Pour chaque couche : le GeoPackage actuel est mis de côté (<génération>/<couche>.avant.gpkg),
@@ -2026,7 +2086,6 @@ function presentSur(ctx, chemin) {
 // defaire() } : `defait` vrai si l'état d'avant est rétabli (ou n'a jamais changé) ; `defaire()` rend les renommages inverses
 // réussis (à appeler si l'inscription au registre échoue après une bascule réussie). Ne lève jamais.
 function basculerGeneration(ctx, groupe, horodatage, attendus) {
-  const dossierImports = dossierCopies(ctx.dossierProjet);
   const fait = [];
   const plan = [];
   const rechargerTout = () => {
@@ -2034,13 +2093,7 @@ function basculerGeneration(ctx, groupe, horodatage, attendus) {
       try { ctx.recharger(groupe[CACHE_ONF.couches[i].couche]); } catch (e) { /* contrôlé ensuite */ }
     }
   };
-  // Un renommage jamais vers un fichier existant (renameFile avec « overwrite » l'effacerait) ni hors de la garde.
-  const renommer = (de, vers) => {
-    if (!peutRenommerCache(de, dossierImports) || !peutRenommerCache(vers, dossierImports) || presentSur(ctx, vers)) return false;
-    let ok = false;
-    try { ok = ctx.renommer(de, vers) === true; } catch (e) { ok = false; }
-    return ok;
-  };
+  const renommer = (de, vers) => renommerCache(ctx, de, vers);
   const defaire = () => {
     const rates = [];
     for (let i = fait.length - 1; i >= 0; i--) {
@@ -2159,15 +2212,16 @@ export function cacheEnregistrer(ctx) {
     // Les trois passent : bascule dans le projet (jamais d'ajout ni de retrait de couche).
     const b = basculerGeneration(ctx, groupe, ctx.horodatage, compte);
     if (!b.ok) {
-      // Retour arrière incomplet : la génération (et la sauvegarde de l'ancien cache qu'elle porte) n'est PAS effacée.
-      if (b.defait) effacerGeneration(ctx, ctx.horodatage);
+      // Retour arrière incomplet : la génération (et la sauvegarde de l'ancien cache qu'elle porte) n'est PAS effacée ; la reprise est
+      // notée (reprendreBascule à l'ouverture) et le registre ne dit plus rien du cache.
+      if (b.defait) effacerGeneration(ctx, ctx.horodatage); else noterReprise(ctx, ctx.horodatage, anciennes);
       return echec(b.raison, b.etape, b.details);
     }
     try {
       remplacerEntreesCache(ctx, entrees((c) => CACHE_ONF.actuel + '/' + c.couche + '.gpkg'));
     } catch (e) {
       const rates = b.defaire();
-      if (rates.length === 0) effacerGeneration(ctx, ctx.horodatage);
+      if (rates.length === 0) effacerGeneration(ctx, ctx.horodatage); else noterReprise(ctx, ctx.horodatage, anciennes);
       return echec('registre non écrit : ' + texteException(e) + (rates.length > 0 ? ' ; retour arrière incomplet : ' + rates.join(', ') : ''), 'registre', null);
     }
     // Fichiers de travail et sauvegardes de l'ancien cache, effacés une fois le registre à jour (le GeoPackage de la génération est
@@ -2259,7 +2313,8 @@ function demarrerGroupeCache(ctx, groupe, entrees, creation) {
   // Migration : trois entrées, toutes en génération, de la même génération.
   const cache = entreesDuCache(entrees);
   const enGeneration = cache.filter((e) => e.chemin.split('/')[0] !== CACHE_ONF.actuel);
-  let nonMigre = false;
+  // Couches dont le cache enregistré (en génération) n'a pas été migré : non affichées.
+  let nonMigrees = [];
   if (enGeneration.length > 0) {
     const h = enGeneration[0].chemin.split('/')[0];
     const memeGeneration = enGeneration.length === CACHE_ONF.couches.length && enGeneration.every((e) => e.chemin.split('/')[0] === h);
@@ -2267,12 +2322,16 @@ function demarrerGroupeCache(ctx, groupe, entrees, creation) {
     const valides = CACHE_ONF.couches.every((c) => { try { return groupe[c.couche].isValid === true; } catch (e) { return false; } });
     const attendus = {};
     for (const e of enGeneration) attendus[e.couche] = e.objets;
-    if (!memeGeneration) { nonMigre = true; bilan.notes.push('migration : génération incomplète ou mêlée dans le registre'); }
-    else if (!services) { nonMigre = true; bilan.notes.push('migration : services de bascule absents'); }
-    else if (!valides) { nonMigre = true; bilan.notes.push('migration : une couche du projet est invalide (fichier créé à l\'instant : rouvrir le projet)'); }
+    if (!memeGeneration) { nonMigrees = enGeneration.map((e) => e.couche); bilan.notes.push('migration : génération incomplète ou mêlée dans le registre'); }
+    else if (!services) { nonMigrees = enGeneration.map((e) => e.couche); bilan.notes.push('migration : services de bascule absents'); }
+    else if (!valides) { nonMigrees = enGeneration.map((e) => e.couche); bilan.notes.push('migration : une couche du projet est invalide (fichier créé à l\'instant : rouvrir le projet)'); }
     else {
       const b = basculerGeneration(ctx, groupe, h, attendus);
-      if (!b.ok) { nonMigre = true; bilan.notes.push('migration : ' + b.raison + ' (' + b.etape + ')'); }
+      if (!b.ok) {
+        nonMigrees = enGeneration.map((e) => e.couche);
+        bilan.notes.push('migration : ' + b.raison + ' (' + b.etape + ')');
+        if (!b.defait) noterReprise(ctx, h, enGeneration);
+      }
       else {
         try {
           const nouvelles = enGeneration.map((e) => Object.assign({}, e, { chemin: CACHE_ONF.actuel + '/' + e.couche + '.gpkg' }));
@@ -2280,8 +2339,9 @@ function demarrerGroupeCache(ctx, groupe, entrees, creation) {
           effacerGeneration(ctx, h);
           bilan.migrees = CACHE_ONF.couches.map((c) => c.couche);
         } catch (e) {
-          nonMigre = true;
+          nonMigrees = enGeneration.map((e) => e.couche);
           const rates = b.defaire();
+          if (rates.length > 0) noterReprise(ctx, h, enGeneration);
           bilan.notes.push('migration : registre non écrit (' + texteException(e) + ')' + (rates.length > 0 ? ' ; retour arrière incomplet' : ''));
         }
       }
@@ -2293,9 +2353,9 @@ function demarrerGroupeCache(ctx, groupe, entrees, creation) {
     try { valide = groupe[code].isValid === true; } catch (e) { valide = false; }
     // Un fichier créé à l'instant ne rend pas valide la couche du projet (reload() ne la répare pas) : QField a sa propre page ;
     // le plugin ne dit « illisible » que d'une couche dont le fichier existait ou d'un cache enregistré mais non affiché.
-    if (nonMigre) bilan.manquantes.push(code);
+    if (nonMigrees.indexOf(code) >= 0 || creation.repriseIncomplete) bilan.manquantes.push(code);
     else if (valide) bilan.rechargees.push(code);
-    else if (bilan.creees.indexOf(code) < 0) bilan.manquantes.push(code);
+    else if (bilan.creees.indexOf(code) < 0 || creation.repriseFaite) bilan.manquantes.push(code);
   }
   return bilan;
 }

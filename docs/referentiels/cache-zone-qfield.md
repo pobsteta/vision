@@ -784,6 +784,15 @@ pas été rouvert (texte « Enregistrement… impossible », aucun texte plus pr
 fermeture de QField, les trois fichiers de travail de la génération (les couches de travail ne sont jamais libérées, § 10) ; les deux groupes
 cochés se superposent avec réseau (arbitrage de Pascal) ; la même paire de noms de couches existe dans les deux groupes.
 
+**Aller-retour 1/3 (relecture)** : une exception de `existe()` vaut « présent » (jamais d'écriture ni de renommage dans le doute) ;
+`renameFile` reste appelé avec « overwrite » vrai, seule forme prouvée par l'essai C4, la logique vérifiant que la cible est absente (passer à
+« faux » ne changerait rien tant que la cible est absente, et la forme « faux » n'est pas essayée). Retour arrière incomplet : le registre est vidé
+des entrées du cache (il ne dit plus ce qui s'affiche), une note de reprise est gardée dans les réglages ; à l'ouverture suivante, avant toute
+création de fichier vide, les sauvegardes `.avant.gpkg` sont remises à `actuel/`, le registre rétabli, et « Cache ONF illisible… » dit que le
+cache n'est pas affiché (couches à relire après réouverture) ; l'état est écrit dans `dernier-echec.txt`. Registre mêlé : seules les couches
+non migrées sont déclarées illisibles. **Limite** : un retour à l'ancien `vision.qgz` (sans style) après le passage au groupe : les couches
+du cache rechargées en tête de liste n'ont plus de `.qml` voisin, donc le style par défaut de QGIS ; non traité.
+
 **Lu dans le code, non essayé sur l'appareil** (à relever sur le Samsung) :
 
 1. `customProperty("vision/cache" …)` lu par le plugin sur des couches **chargées par le projet** (la sonde posait les marques par le plugin) ;
