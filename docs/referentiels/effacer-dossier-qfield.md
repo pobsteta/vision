@@ -64,6 +64,28 @@ boîte ? dossier disparu après « Remove » ? ; (b) même appel sur un dossier 
 (c) « Annuler » : rien ne bouge ? ; (d) l'appel pendant que le panneau Vision est ouvert : le panneau reste-t-il utilisable ?
 Compter les touchers (gants).
 
+## Pourquoi effacer `-wal`, `-shm` et `.aux.xml` d'une couche gardée est sûr (26 novembre 2026, temps 3)
+
+Au réimport, avant de réécrire le `.gpkg` d'une couche gardée, le plugin efface ses annexes (`<couche>.gpkg-wal`,
+`<couche>.gpkg-shm`, `<couche>.gpkg.aux.xml`). Raisons, lues dans `docs/referentiels/cache-zone-qfield.md` § 14.2 :
+
+1. **Un `-wal` laissé est dangereux pour le fichier suivant.** Un nouveau `.gpkg` écrit au même nom pourrait rejouer le journal
+   d'un autre fichier. Les effacer avant la réécriture évite ce rejeu ; c'est la raison d'être de la règle.
+2. **Une couche ouverte par QGIS n'en a normalement pas.** QGIS ouvre d'abord un GeoPackage en écriture **sans WAL**
+   (`DO_NOT_ENABLE_WAL`), puis le rouvre en lecture seule, et à la fermeture remet `journal_mode = delete` (§ 14.2, lignes
+   QGIS citées là). Les couches de Vision sont en lecture seule : il n'y a donc, en pratique, rien à perdre dans ces annexes.
+   Un `.aux.xml` ne contient que des statistiques ou un système de coordonnées auxiliaires, recalculables.
+3. **Android permet d'effacer un fichier ouvert** (§ 14.2 : renommer ou effacer un fichier ouvert est permis sous Linux) : l'effacement
+   n'échoue pas du seul fait que la couche est sur la carte, et la couche déjà ouverte garde son descripteur sur l'ancien fichier
+   jusqu'au retrait de la carte.
+4. **Le `.gpkg` lui-même n'est jamais effacé par ce chemin** (D3-04 le vérifie) : seule une annexe peut partir.
+
+**Risque résiduel, à essayer sur le Samsung** : une connexion OGR encore ouverte sur l'ancienne copie pourrait recréer un `-wal`
+ou un `-shm` après l'effacement, ou le refuser. Le plugin retire d'abord la couche de la carte (donc ferme la connexion) puis
+efface ; si une annexe résiste, la couche est gardée telle quelle et le message nomme le fichier (« Fichiers restés sur
+l'appareil : … »). Essai : réimporter deux fois de suite un zip modifié sur le Samsung, puis lister `vision-imports/<zip>/`
+(aucun `-wal`/`-shm` ne doit rester ni réapparaître).
+
 ## Contrat proposé pour D1-01 et D1-05 (testeur)
 
 Les tests actuels (`tests/registre-014.test.mjs` l. 62-82, 309-317, 347-355) supposent un service **synchrone, qui rend vrai/faux**

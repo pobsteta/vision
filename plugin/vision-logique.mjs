@@ -12,7 +12,7 @@
 // Aucune fonction ne touche QField : tout passe par les objets reçus (réglages, chargerCouche,
 // existe, platformUtilities), que Vision.qml branche sur l'API de QField (plugin/PLAN.md § 5).
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.9.0';
 
 // Mission 038 : comptage des entités par itérateur. Dans QGIS 3a92eb3, `featureCount()` (qgsvectorlayer.h l. 1701,
 // `long long featureCount() const final;`) n'est ni Q_PROPERTY ni Q_INVOKABLE : QML ne peut pas l'appeler. QField v4.3.7

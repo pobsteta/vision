@@ -193,8 +193,8 @@ test('retours « vides » (projet non Vision) portent aussi ecartees: []', () =>
   assert.deepEqual(r.ecartees, []);
 });
 
-test('version 0.7.0 et préversion : branche de la mission 050 dans release-plugin.yml', () => {
-  assert.equal(L.VERSION, '0.7.0');
-  assert.match(readFileSync(resolve(RACINE, 'plugin/metadata.txt'), 'utf8'), /^version=0\.7\.0$/m);
+test('version 0.9.0 et préversion : branche de la mission 050 dans release-plugin.yml', () => {
+  assert.equal(L.VERSION, '0.9.0');
+  assert.match(readFileSync(resolve(RACINE, 'plugin/metadata.txt'), 'utf8'), /^version=0\.9\.0$/m);
   assert.match(readFileSync(resolve(RACINE, '.github/workflows/release-plugin.yml'), 'utf8'), /'mission\/050-vision'/);
 });

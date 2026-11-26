@@ -647,9 +647,15 @@ autres résultats (Q2 à Q4) tiennent.
    puis conversion en tableau d'octets, `plugin/Vision.qml` l. 404), sur la copie déjà écrite dans `vision-imports/` ;
    à 100 Mo, environ 200 Mo au pic sur le fil de l'interface, plus 100 Mo sur le disque. À prouver sur le Samsung
    (zips de 50 puis 95 Mo). La piste « lire seulement l'index du zip » reste ouverte. Rien n'est tranché ici.*
-2. **Mission 014 (registre complet)** : sort du dossier `vision-imports/<nom du zip>/` une fois vide (l'effacer ?) et
-   remplacement du dossier entier au réimport (ADR 0007 amendée, ADR 0008 note du 4 novembre ; § 3.3). *À trancher par Pascal.*
-   *Tranché par Pascal le 26 novembre 2026, puis corrigé le même jour après la preuve de QField v4.3.8 : dossier vide LAISSÉ (limite, § 3.3), annexes effacées au réimport ; d'abord « dossier vide effacé », dossier entier remplacé au réimport ; mission 014 fusionnée avec la 013 (preuve avant code : effacement d'un dossier par le plugin, non prouvé).*
+2. **Mission 014 (registre complet)** : que devient le dossier `vision-imports/<nom du zip>/` une fois vide, et que
+   devient-il au réimport ? *Trace : la question posée le 5 novembre 2026 était « l'effacer ? » et « remplacer le dossier
+   entier au réimport » (ADR 0007 amendée, ADR 0008 note du 4 novembre ; § 3.3).*
+   **Tranché par Pascal le 26 novembre 2026, après la preuve de QField v4.3.8 : le dossier vide est LAISSÉ** (limite
+   écrite au § 3.3 : QField n'expose aucune fonction d'effacement de dossier sans boîte de confirmation ni risque ; preuve
+   dans `docs/referentiels/effacer-dossier-qfield.md`). Au retrait comme au réimport, le plugin efface les **fichiers** de la
+   couche (`.gpkg`, `.qml`, et les annexes `-wal`, `-shm`, `.aux.xml`) et jamais le dossier. *Historique : le même jour, la
+   première décision était « dossier vide effacé, dossier entier remplacé au réimport » ; elle est remplacée par celle-ci.*
+   Mission 014 fusionnée avec la 013 (preuve avant code).
 3. **Mission 013 (tests du registre complet)** : « Validé » depuis le 2 novembre 2026, jamais lancée ; ses tests portent sur le registre
    de la 014 (aucune PR). Faire, fusionner avec la 014 ou abandonner ? *À trancher par Pascal.*
    *Tranché par Pascal le 26 novembre 2026 : fusionnée avec la 014 (tests d'acceptation du testeur d'abord).*
