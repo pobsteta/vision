@@ -99,6 +99,8 @@ Voir [`docs/spec.md`](docs/spec.md) § 3.5.
 
 ## 3. Charger un zip avec plusieurs couches
 
+**Tu prépares un zip ?** Lis d'abord [`docs/preparer-son-zip.md`](docs/preparer-son-zip.md) : formats, plafond, noms de couches et styles, messages de refus, en une page.
+
 Le plugin 0.9.0 (sur `main`) fait ce qui suit. Pas plus.
 
 ### Ce que le plugin lit aujourd'hui

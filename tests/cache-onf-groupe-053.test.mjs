@@ -667,7 +667,7 @@ test('Panneau.qml : un seul bouton de cache, plus de bouton d\'essai ni de texte
   assert.equal((p.match(/mettreEnCacheOnf\(\)/g) || []).length, 1);
 });
 
-test('version du plugin : 0.9.0 (préversion), inchangée', () => {
+test('version du plugin : 0.9.0 (mission 014)', () => {
   assert.equal(L.VERSION, '0.9.0');
   assert.match(lire('plugin/metadata.txt'), /version=0\.9\.0/);
 });
