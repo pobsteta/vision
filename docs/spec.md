@@ -641,16 +641,21 @@ autres résultats (Q2 à Q4) tiennent.
    (zips de 50 puis 95 Mo). La piste « lire seulement l'index du zip » reste ouverte. Rien n'est tranché ici.*
 2. **Mission 014 (registre complet)** : sort du dossier `vision-imports/<nom du zip>/` une fois vide (l'effacer ?) et
    remplacement du dossier entier au réimport (ADR 0007 amendée, ADR 0008 note du 4 novembre ; § 3.3). *À trancher par Pascal.*
+   *Tranché par Pascal le 26 novembre 2026 : dossier vide effacé, dossier entier remplacé au réimport ; mission 014 fusionnée avec la 013 (preuve avant code : effacement d'un dossier par le plugin, non prouvé).*
 3. **Mission 013 (tests du registre complet)** : « Validé » depuis le 2 novembre 2026, jamais lancée ; ses tests portent sur le registre
    de la 014 (aucune PR). Faire, fusionner avec la 014 ou abandonner ? *À trancher par Pascal.*
+   *Tranché par Pascal le 26 novembre 2026 : fusionnée avec la 014 (tests d'acceptation du testeur d'abord).*
 4. **Mission 015 (panneau pour gants et soleil)** : « Validé » depuis le 2 novembre 2026 ; le panneau existe
    (`plugin/Panneau.qml`) sans que la fiche ait été reprise ; les cases de choix des couches prévues au § 1 n'existent pas
    (README § 3). Reprendre, découper ou abandonner ? *À trancher par Pascal.*
+   *Tranché par Pascal le 26 novembre 2026 : abandonnée ; le panneau actuel suffit, les cases de choix des couches du § 1 ne sont plus attendues.*
 5. **Mission 017 (convention du zip)** : « Validé » depuis le 2 novembre 2026 ; le contenu est aujourd'hui réparti entre
    § 3.1, § 4, § 5 et README § 3. Écrire la page unique pour JFC (avec les annexes), ou déclarer la spec et le README
    suffisants ? *À trancher par Pascal.*
+   *Tranché par Pascal le 26 novembre 2026 : page unique « préparer son zip » pour JFC, avec la notice de la 018.*
 6. **Message « préparer le hors ligne »** : idée de l'orchestrateur (rappeler à l'agent, avant de partir, d'ouvrir la
    zone du jour pour remplir le cache des fonds IGN, critère 5), **non décidée**, aucun texte validé. *À trancher par Pascal.*
+   *Tranché par Pascal le 26 novembre 2026 : oui, rappel avant le terrain (fonds IGN et cache ONF de la zone du jour) ; texte et moment proposés par le dev, validés par Pascal avant tout code.*
 7. **Essais de recette non rapportés** (d'ici le 12 novembre, décision du bilan n° 1) : critères 1, 3, 5 (veille et J+2),
    7 et 10 du § 6, détail des essais de lecture des tables et du style de GeoPackage (§ 4, § 5). Ce ne sont pas des
    décisions mais des résultats attendus de Pascal.
@@ -672,3 +677,4 @@ autres résultats (Q2 à Q4) tiennent.
     registre (`vision_id` identique) : couches de zips d'un projet listées dans l'autre, cache de l'un remplacé par celui de l'autre. Contraire à la
     règle « un seul `vision.qgz` par appareil » (§ 3.3), tenue par consigne seulement. Imposer la règle dans le code, ou changer de clé ? *À trancher
     par Pascal.*
+    *Tranché par Pascal le 26 novembre 2026 : laisser tel quel ; la règle « un seul vision.qgz par appareil » reste tenue par consigne (README à rendre plus explicite).*
