@@ -174,6 +174,7 @@ Couleurs, épaisseurs et tailles de police : [`docs/spec.md`](docs/spec.md) § 5
 - **Zoom** : les parcelles et les points de secours n'apparaissent qu'en zoomant (en deçà du 1:50 000) ; les forêts sont visibles à toutes les échelles.
 - **Une zone de 20 km de côté au plus** (et 5 000 objets par couche au plus) : au-delà, le plugin refuse et demande de zoomer.
 - **Une seule zone à la fois** : un nouveau cache remplace l'ancien, mais seulement s'il réussit en entier ; sinon l'ancien est gardé et un message le dit. Si le message est « Cache ONF prêt : fermez puis rouvrez le projet pour l'afficher. », ferme puis rouvre le projet.
+- **Vider le cache** (plugin 0.10.0, mission 054, 26 novembre 2026) : bouton Vision, puis **« Vider le cache ONF »** (visible seulement quand un cache existe), puis **« Oui, vider »** (la question se referme seule après 15 secondes). Les trois couches restent dans la légende, vides ; les zips importés et la saisie ne sont pas touchés ; il faudra du réseau pour refaire un cache. Détail : [spec § 3.6](docs/spec.md).
 - **Ces couches sont en lecture seule.** Un zip nommé `_cache-onf.zip` est refusé : nom réservé par Vision.
 - **Le service de l'ONF n'est joignable qu'en http** (pas de https) : c'est normal, et ses données sont publiques. Aucune clé n'est nécessaire.
 
