@@ -31,19 +31,15 @@ _Modèle de carte :_
 
 ## Validé
 
-- [013-tests-registre](missions/013-tests-registre.md) · depuis le cycle 0 ; **à trancher par Pascal** (spec § 11 n° 3) ; journal du 4 novembre : « immobile depuis le cycle 0 », aucune PR
+- [013-tests-registre](missions/013-tests-registre.md) · depuis le cycle 0 ; **fusionnée avec la 014 par Pascal le 26 novembre 2026** (le testeur écrit d'abord les tests d'acceptation, puis le dev réalise) ; fiche commune à réécrire
   - Homme : `testeur` (sonnet)
   - Mission : Tests du registre complet — cycle prévu 5
   - Moyens : `docs/spec.md` § 3.3, § 9 
-- [014-registre](missions/014-registre.md) · depuis le cycle 0 ; **à trancher par Pascal** (spec § 11 n° 2) : dossier vide et remplacement au réimport, question ouverte de l'ADR 0007 amendée ; aucune PR
+- [014-registre](missions/014-registre.md) · depuis le cycle 0 ; **tranchée par Pascal le 26 novembre 2026** : dossier vide effacé, dossier entier remplacé au réimport (preuve avant code : un plugin sait-il effacer un dossier ? cf. 053) ; fiche à réécrire avec la 013
   - Homme : `dev` (sonnet)
   - Mission : Registre complet — cycle prévu 6
   - Moyens : `docs/spec.md` § 3.3, ADR 0003
-- [015-panneau-plugin](missions/015-panneau-plugin.md) · depuis le cycle 0 ; **à trancher par Pascal** (spec § 11 n° 4) ; aucune PR, le panneau existe pourtant (`plugin/Panneau.qml`)
-  - Homme : `afficheur` (sonnet)
-  - Mission : Panneau du plugin pour gants et soleil — cycle prévu 6
-  - Moyens : `docs/spec.md` § 1 et § 4
-- [017-convention-zip](missions/017-convention-zip.md) · depuis le cycle 0 ; **à trancher par Pascal** (spec § 11 n° 5) ; aucune PR, contenu réparti dans spec § 3.1, § 4, § 5 et README
+- [017-convention-zip](missions/017-convention-zip.md) · depuis le cycle 0 ; **tranchée par Pascal le 26 novembre 2026** : page unique « préparer son zip » pour JFC, avec la notice de la 018 ; fiche à reprendre
   - Homme : `archiviste` (sonnet)
   - Mission : Convention du zip — cycle prévu 5
   - Moyens : `docs/spec.md` § 3.1, § 4, § 5
@@ -53,6 +49,10 @@ _Modèle de carte :_
 
 ## Terminé
 
+- [015-panneau-plugin](missions/015-panneau-plugin.md) · depuis le cycle 0 · **abandonnée par Pascal le 26 novembre 2026** : panneau actuel jugé suffisant, cases de choix des couches retirées du besoin
+  - Homme : `afficheur` (sonnet)
+  - Mission : Panneau du plugin pour gants et soleil — cycle prévu 6
+  - Moyens : `docs/spec.md` § 1 et § 4
 - [053-couches-onf-wfs](missions/053-couches-onf-wfs.md) · depuis le cycle 6 · fusionnée (PR #60, 26 novembre 2026), plugin 0.7.0 ; question ouverte : registre partagé entre projets Vision (spec § 11 n° 12)
   - Homme : `dev` (étapes 1 à 2), `archiviste` (spec, README, référentiels), puis `relecteur`
   - Mission : forêts publiques, parcelles forestières et points de rencontre des secours de l'ONF dans `vision.qgz` : cache de zone sur le mobile, groupe « ONF Cache » à chemins fixes (ADR 0010 amendée le 26 novembre 2026 ; le WFS du projet et la copie nationale sont abandonnés), aux styles de Pascal adaptés aux champs réels
