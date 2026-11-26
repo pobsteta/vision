@@ -88,7 +88,7 @@ test('panneau : ligne permanente sous le bouton du cache, ligne conditionnelle, 
   assert.doesNotMatch(bloc, /Dialog|Popup|modal/i);
 });
 
-test('version du plugin : 0.9.0 (mission 014, après la 055), constante et metadata.txt', () => {
-  assert.equal(L.VERSION, '0.9.0');
-  assert.match(lire('plugin/metadata.txt'), /^version=0\.9\.0$/m);
+test('version du plugin : 0.10.0 (mission 014, après la 055), constante et metadata.txt', () => {
+  assert.equal(L.VERSION, '0.10.0');
+  assert.match(lire('plugin/metadata.txt'), /^version=0\.10\.0$/m);
 });

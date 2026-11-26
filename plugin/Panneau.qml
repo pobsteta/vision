@@ -16,11 +16,16 @@ Item {
   property var couches: []
   property string ligneCache: ""
   property string ligneRappel: ""
+  // Mission 054 : « Vider le cache ONF », avec confirmation dans le panneau (ni fenêtre ni Popup), refermée seule au bout de 15 s.
+  property bool viderCacheVisible: false
+  property bool confirmationVider: false
 
   function relire() {
     couches = vision ? vision.couchesInscrites() : [];
     ligneCache = vision ? vision.cacheLigne() : "";
     ligneRappel = vision ? vision.rappelLigne() : "";
+    viderCacheVisible = vision ? vision.viderCacheVisible() : false;
+    if (!viderCacheVisible) confirmationVider = false;
   }
 
   Component.onCompleted: relire()
@@ -57,9 +62,70 @@ Item {
         Layout.fillWidth: true
         Layout.preferredHeight: 72
         font.pointSize: 18
-        enabled: panneau.vision && !panneau.vision.cacheEnCours
+        enabled: panneau.vision && !panneau.vision.cacheEnCours && !panneau.vision.viderEnCours
         text: panneau.vision ? (panneau.vision.cacheEnCours ? panneau.vision.textePendantCache : panneau.vision.texteBoutonCache) : ""
         onClicked: panneau.vision.mettreEnCacheOnf()
+      }
+
+      // Mission 054 : textes validés par Pascal le 26 novembre 2026 (Logique.TEXTES_VIDER_CACHE_ONF). Aucun texte pendant le vidage.
+      Button {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 72
+        font.pointSize: 18
+        visible: panneau.viderCacheVisible && !panneau.confirmationVider
+        enabled: panneau.vision && !panneau.vision.cacheEnCours && !panneau.vision.viderEnCours
+        text: panneau.vision ? panneau.vision.textesVider.bouton : ""
+        onClicked: {
+          panneau.confirmationVider = true;
+          minuterieVider.restart();
+        }
+      }
+
+      ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 24
+        visible: panneau.viderCacheVisible && panneau.confirmationVider
+
+        Label {
+          Layout.fillWidth: true
+          wrapMode: Text.WordWrap
+          color: "black"
+          font.pointSize: 18
+          font.bold: true
+          text: panneau.vision ? panneau.vision.textesVider.confirmation : ""
+        }
+
+        Button {
+          Layout.fillWidth: true
+          Layout.preferredHeight: 72
+          font.pointSize: 18
+          enabled: panneau.vision && !panneau.vision.viderEnCours
+          text: panneau.vision ? panneau.vision.textesVider.non : ""
+          onClicked: {
+            minuterieVider.stop();
+            panneau.confirmationVider = false;
+          }
+        }
+
+        Button {
+          Layout.fillWidth: true
+          Layout.preferredHeight: 72
+          font.pointSize: 18
+          enabled: panneau.vision && !panneau.vision.cacheEnCours && !panneau.vision.viderEnCours
+          text: panneau.vision ? panneau.vision.textesVider.oui : ""
+          onClicked: {
+            minuterieVider.stop();
+            panneau.confirmationVider = false;
+            panneau.vision.viderCacheOnf();
+          }
+        }
+      }
+
+      Timer {
+        id: minuterieVider
+        interval: panneau.vision ? panneau.vision.delaiConfirmationVider : 15000
+        repeat: false
+        onTriggered: panneau.confirmationVider = false
       }
 
       Label {
