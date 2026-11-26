@@ -502,7 +502,7 @@ test('D3-03 réimport sans annexe sur le disque : le .gpkg n\'est pas effacé, l
   assert.deepEqual(couchesDe(m, w.reglages, 'deux.zip'), ['a']);
 });
 
-test('D3-04 réimport : une annexe de la couche gardée refuse de s\'effacer -> cette couche n\'est PAS réécrite (fichier, registre, carte : l\'ancienne reste), la ligne « Fichiers restés sur l\'appareil : a.gpkg-wal. » la nomme ; l\'autre couche est réécrite normalement', async () => {
+test('D3-04 réimport : une annexe de la couche gardée refuse de s\'effacer -> cette couche n\'est PAS réécrite (fichier et registre inchangés ; rechargée sur la carte depuis l\'ancienne copie), la ligne « Fichiers restés sur l\'appareil : a.gpkg-wal. » la nomme ; l\'autre couche est réécrite normalement', async () => {
   const m = await M();
   const wal = `${D_DEUX}/a.gpkg-wal`;
   const w2 = mondeImport({ rate: [wal] });
@@ -511,13 +511,13 @@ test('D3-04 réimport : une annexe de la couche gardée refuse de s\'effacer -> 
   const reg2 = m.lireRegistre(w2.reglages, ID).find((x) => x.couche === 'a');
   w2.journal.length = 0; w2.appelsFichier.length = 0;
   const ajoutees2 = [];
-  const r2 = await importe(w2, { ajouterALaCarte: (c, nom, source) => ajoutees2.push(nom, source), maintenant: () => new Date('2026-11-27T10:00:00.000Z') });
+  const r2 = await importe(w2, { ajouterALaCarte: (c, nom, source) => ajoutees2.push({ nom, source }), maintenant: () => new Date('2026-11-27T10:00:00.000Z') });
   assert.ok(!w2.journal.includes(`reecrire ${D_DEUX}/a.gpkg`), `a n'est pas réécrite : ${w2.journal.join(' | ')}`);
   assert.equal(w2.fichiersSur.has(`${D_DEUX}/a.gpkg`), true, 'l\'ancien .gpkg reste');
   assert.ok(!w2.appelsFichier.includes(`${D_DEUX}/a.gpkg`), 'le .gpkg n\'est jamais effacé');
   assert.equal(w2.fichiersSur.has(wal), true);
   assert.deepEqual(m.lireRegistre(w2.reglages, ID).find((x) => x.couche === 'a'), reg2, 'entrée de a au registre inchangée (même date)');
-  assert.ok(ajoutees2.includes(`${D_DEUX}/b.gpkg`) && !ajoutees2.includes('a') && !ajoutees2.includes(`${D_DEUX}/a.gpkg`), `a n'est pas rechargée sur la carte : ${ajoutees2.join(', ')}`);
+  assert.deepEqual(ajoutees2.map((x) => x.source).sort(), [`${D_DEUX}/a.gpkg`, `${D_DEUX}/b.gpkg`], `a est rechargée sur la carte depuis son ANCIENNE copie (une fois), b depuis sa copie réécrite : ${JSON.stringify(ajoutees2)}`);
   assert.ok(w2.journal.includes(`reecrire ${D_DEUX}/b.gpkg`), 'b est réécrite normalement');
   assert.deepEqual(couchesDe(m, w2.reglages, 'deux.zip'), ['a', 'b']);
   assert.equal(/Fichiers restés sur l'appareil : (.*?)\.(?=\s|$)/s.exec(r2.message ?? '')?.[0], "Fichiers restés sur l'appareil : a.gpkg-wal.", `« ${r2.message} » : ${R3}`);
