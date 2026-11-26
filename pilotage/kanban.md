@@ -31,14 +31,6 @@ _Modèle de carte :_
 
 ## Validé
 
-- [013-tests-registre](missions/013-tests-registre.md) · depuis le cycle 0 ; **fusionnée avec la 014 par Pascal le 26 novembre 2026** (le testeur écrit d'abord les tests d'acceptation, puis le dev réalise) ; fiche reprise le 26 novembre (dans la 014)
-  - Homme : `testeur` (sonnet)
-  - Mission : Tests du registre complet — cycle prévu 5
-  - Moyens : `docs/spec.md` § 3.3, § 9 
-- [014-registre](missions/014-registre.md) · depuis le cycle 7 · réalisée, relue « prête », **PR #65 à fusionner après la #64** (plugin 0.9.0) ; **tranchée par Pascal le 26 novembre 2026** : dossier vide effacé, dossier entier remplacé au réimport (preuve avant code : un plugin sait-il effacer un dossier ? cf. 053) ; fiche reprise le 26 novembre, **à valider par Pascal**
-  - Homme : `dev` (sonnet)
-  - Mission : Registre complet — cycle prévu 6
-  - Moyens : `docs/spec.md` § 3.3, ADR 0003
 
 ## Planifié
 
@@ -46,6 +38,14 @@ _Modèle de carte :_
 
 ## Terminé
 
+- [013-tests-registre](missions/013-tests-registre.md) · depuis le cycle 7 · fusionnée dans la 014 (PR #65)
+  - Homme : `testeur` (sonnet)
+  - Mission : Tests du registre complet — cycle prévu 5
+  - Moyens : `docs/spec.md` § 3.3, § 9 
+- [014-registre](missions/014-registre.md) · depuis le cycle 7 · fusionnée (PR #65, 26 novembre 2026), plugin 0.9.0 ; 013 fusionnée dedans
+  - Homme : `dev` (sonnet)
+  - Mission : Registre complet — cycle prévu 6
+  - Moyens : `docs/spec.md` § 3.3, ADR 0003
 - [055-rappel-hors-ligne](missions/055-rappel-hors-ligne.md) · depuis le cycle 7 · fusionnée (PR #64, 26 novembre 2026), plugin 0.8.0
   - Homme : `dev` (proposition du texte, puis réalisation), puis `relecteur`
   - Mission : rappeler à l'agent, avant le terrain, de préparer le hors-ligne (fonds IGN, cache ONF de la zone du jour)
