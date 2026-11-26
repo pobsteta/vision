@@ -1,6 +1,6 @@
 # Préparer son zip pour Vision
 
-Page pour JFC. Elle dit **quoi mettre dans le zip** pour que le plugin Vision 0.7.0 l'accepte du premier coup, sans réseau. Le détail et les textes exacts des refus sont dans [`spec.md`](spec.md) § 3.1, § 4 et § 5 : en cas de doute, la spec et le code font foi, pas cette page.
+Page pour JFC. Elle dit **quoi mettre dans le zip** pour que le plugin Vision l'accepte du premier coup, sans réseau. Version du plugin : voir le [README](../README.md) (en tête, « Version courante ») ; cette page ne recopie pas de numéro. Le détail et les textes exacts des refus sont dans [`spec.md`](spec.md) § 3.1, § 4 et § 5 : en cas de doute, la spec et le code font foi, pas cette page.
 
 ## En deux minutes
 

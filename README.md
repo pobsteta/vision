@@ -2,6 +2,8 @@
 
 Vision est un projet QField modèle (`vision.qgz`) pour toute unité territoriale de métropole, avec les fonds IGN en flux. Un plugin QField, écrit pour Vision, permet à l'agent d'ajouter sur le terrain, depuis un zip, les couches dont il a besoin, affichées aux couleurs du manuel.
 
+**Version courante** : version publiée = la release « latest » (`releases/latest/download/plugin-vision.zip`, section 2) ; numéro de la branche = `version=` dans [`plugin/metadata.txt`](plugin/metadata.txt), seule source. Le seul numéro écrit dans ce README est celui de la phrase « Le plugin X (sur `main`) » de la section 3, exigé par `tests/readme.test.mjs` : il se met à jour à chaque montée de version, le test le rappelle.
+
 Ce qu'on construit, pour qui : [`docs/brief.md`](docs/brief.md). Le détail du comportement : [`docs/spec.md`](docs/spec.md).
 
 Adresses vérifiées le 4 novembre 2026 (lecture de l'API GitHub) sous l'ancien nom du dépôt : à partir de la version 0.5.0, publiée à la fusion de la mission 050, les quatre releases existent et portent les fichiers cités.
@@ -229,7 +231,7 @@ Un zip de démonstration (données fictives, aux noms du manuel : UG, Parcelles,
 
 - Brief : [`docs/brief.md`](docs/brief.md). Spécification : [`docs/spec.md`](docs/spec.md). Décisions d'architecture : [`docs/adr/`](docs/adr/) (index : [`docs/adr/README.md`](docs/adr/README.md)).
 - Code du plugin : [`plugin/`](plugin/). Les plans [`plugin/PLAN.md`](plugin/PLAN.md), [`plugin/PLAN-012.md`](plugin/PLAN-012.md) et [`outils/PLAN-021.md`](outils/PLAN-021.md) sont de l'**historique périmé** (bandeau en tête) : la référence est la spec.
-- Tests : `node --test` à la racine (commande dans [`.claude/test-command`](.claude/test-command)).
+- Tests : `node --test` à la racine (commande dans [`.claude/test-command`](.claude/test-command)). **Deux échecs attendus sans Python/pyproj** : « le script se relance sans argument (contour versé)… » et « le script sort en erreur si l'empreinte du contour diffère » (`tests/emprise.test.mjs`) lancent [`outils/emprise.py`](outils/emprise.py), qui importe `pyproj` (`ModuleNotFoundError`). Pour les faire passer : Python 3.12 puis `pip install -r outils/requirements.txt` (`pyproj==3.8.0`). Ces deux tests ne concernent pas le plugin (ils contrôlent l'emprise de la métropole, outil de référence) ; les autres tests passent sans rien installer. Constat du 26 novembre 2026 : 1137 réussis, 2 échecs, sans pyproj.
 - Méthode de travail, rôles, sources de vérité : [`CLAUDE.md`](CLAUDE.md). Mémoire du projet : [`pilotage/journal.md`](pilotage/journal.md) (ajout seul).
 - Aucune clé ni donnée de l'ONF dans le dépôt. Licence du plugin : GPL-3.0-or-later.
 

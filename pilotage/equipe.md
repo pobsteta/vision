@@ -49,6 +49,8 @@
 | [017 Convention du zip](missions/017-convention-zip.md) | `archiviste` | sonnet | appuyer | oui/oui/oui | 5 |
 | [018 Notice de JFC](missions/018-notice-jfc.md) | `archiviste` | sonnet | tenir | oui/non/non | en attente |
 
+*Ajout du 26 novembre 2026 (bilan n° 2) : ce tableau s'arrête à la mission 019. **Missions 019 à 055 : agent, cycle et état dans [`kanban.md`](kanban.md) et les fiches `missions/`** (pas de recopie ici). Sorts des deux lignes ci-dessus : **015 abandonnée** (Pascal, 26 novembre 2026) ; **013 fusionnée dans la 014** (PR #65).*
+
 Cycle = cycle de `/boucle` prévu, sous le plafond de 3 PR ouvertes. Agents mobilisés : `acquereur`, `testeur`, `dev`, `afficheur`, `archiviste`, `relecteur` (chaque PR). Ni `analyste` (pas encore d'échecs à compter) ni `contradicteur` (déjà passé sur brief, spec et ADR ; rappelé pour toute nouvelle ADR).
 
 ## Bilan du 5 novembre 2026 (validé par Pascal)
