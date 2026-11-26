@@ -1558,6 +1558,10 @@ export const TEXTES_CACHE_ONF = {
   positionIllisible: "Position de la carte illisible : le cache ONF n'est pas mis à jour, l'ancien est gardé.",
   // À la réouverture : une couche du cache absente ou illisible sur l'appareil.
   cacheIllisible: "Cache ONF illisible : il n'est pas affiché ; remettez-le en cache avec réseau.",
+  // Mode groupe : une couche du projet était invalide au bouton (fichier absent créé à l'instant, illisible) : le cache est écrit à
+  // actuel/ mais cette couche ne se relit qu'à la réouverture du projet (reload() ne rend pas valide une couche invalide).
+  // Validé par Pascal le 26 novembre 2026.
+  cachePret: "Cache ONF prêt : fermez puis rouvrez le projet pour l'afficher.",
 };
 
 export function messageZipReserve(nomZip) {
@@ -2085,11 +2089,13 @@ function reprendreBascule(ctx) {
 // inverses (ordre inverse), nouveau reload. `attendus` = { <couche>: nombre d'objets }. Rend { ok, raison, etape, details, defait,
 // defaire() } : `defait` vrai si l'état d'avant est rétabli (ou n'a jamais changé) ; `defaire()` rend les renommages inverses
 // réussis (à appeler si l'inscription au registre échoue après une bascule réussie). Ne lève jamais.
-function basculerGeneration(ctx, groupe, horodatage, attendus) {
+function basculerGeneration(ctx, groupe, horodatage, attendus, invalides) {
+  const aRouvrir = invalides || [];
   const fait = [];
   const plan = [];
   const rechargerTout = () => {
     for (let i = 0; i < CACHE_ONF.couches.length; i++) {
+      if (aRouvrir.indexOf(CACHE_ONF.couches[i].couche) >= 0) continue; // couche invalide : reload() ne la répare pas
       try { ctx.recharger(groupe[CACHE_ONF.couches[i].couche]); } catch (e) { /* contrôlé ensuite */ }
     }
   };
@@ -2131,6 +2137,7 @@ function basculerGeneration(ctx, groupe, horodatage, attendus) {
   const ecarts = [];
   for (let i = 0; i < plan.length; i++) {
     const code = plan[i].c.couche;
+    if (aRouvrir.indexOf(code) >= 0) continue; // affichée à la réouverture seulement (texte « Cache ONF prêt… »)
     const l = groupe[code];
     let valide = false;
     try { valide = l.isValid === true; } catch (e) { valide = false; }
@@ -2171,19 +2178,21 @@ export function cacheEnregistrer(ctx) {
   if (ctx.depart && (ctx.depart.visionId !== ctx.visionId || ctx.depart.dossierProjet !== ctx.dossierProjet)) return echec('projet changé pendant le téléchargement');
   if (etatRegistre(ctx.reglages, ctx.visionId).illisible) return echec('registre illisible');
   const groupe = groupeDuProjet(ctx);
+  const invalides = [];
   const services = ['ecrireFichier', 'effacerFichier', 'ouvrirCouche', 'creerIterateur', 'imposerSysteme', 'reecrireCouche']
     .concat(groupe ? ['renommer', 'recharger'] : ['retirerCacheDeLaCarte', 'ajouterCache']);
   for (const s of services) {
     if (typeof ctx[s] !== 'function') return echec('service absent : ' + s);
   }
   if (groupe) {
-    // Avant toute écriture : une couche du projet invalide (fichier absent ou illisible à l'ouverture) ne se répare pas par reload()
-    // (QgsMapLayer::reload ne passe pas par setValid, § 14.1) ; un -wal à côté d'un GeoPackage actuel serait rejoué sur un autre fichier.
+    // Une couche du projet invalide (fichier absent ou illisible à l'ouverture) ne se répare pas par reload() (QgsMapLayer::reload ne passe
+    // pas par setValid, § 14.1) : le cache est quand même posé à actuel/, elle le lira à la réouverture (texte « Cache ONF prêt… »).
+    // Avant toute écriture : un -wal à côté d'un GeoPackage actuel serait rejoué sur un autre fichier.
     for (let i = 0; i < CACHE_ONF.couches.length; i++) {
       const code = CACHE_ONF.couches[i].couche;
       let valide = false;
       try { valide = groupe[code].isValid === true; } catch (e) { valide = false; }
-      if (!valide) return echec(code + ' : couche du projet invalide (à rouvrir le projet : reload() ne la répare pas)', 'groupe : couche invalide', { couche: code });
+      if (!valide) invalides.push(code);
       const p = cacheCheminsGroupe(ctx.dossierProjet, ctx.horodatage, code);
       if (p !== null && presentSur(ctx, p.wal)) return echec(code + ' : journal SQLite (-wal) à côté du GeoPackage actuel', 'groupe : -wal', { wal: p.wal });
     }
@@ -2210,7 +2219,7 @@ export function cacheEnregistrer(ctx) {
     date: date.toISOString(), objets: compte[c.couche] }));
   if (groupe) {
     // Les trois passent : bascule dans le projet (jamais d'ajout ni de retrait de couche).
-    const b = basculerGeneration(ctx, groupe, ctx.horodatage, compte);
+    const b = basculerGeneration(ctx, groupe, ctx.horodatage, compte, invalides);
     if (!b.ok) {
       // Retour arrière incomplet : la génération (et la sauvegarde de l'ancien cache qu'elle porte) n'est PAS effacée ; la reprise est
       // notée (reprendreBascule à l'ouverture) et le registre ne dit plus rien du cache.
@@ -2246,6 +2255,7 @@ export function cacheEnregistrer(ctx) {
     const h = anciennes[i].chemin.split('/')[0];
     if (h !== ctx.horodatage && h !== CACHE_ONF.actuel && !vues[h]) { vues[h] = true; effacerGeneration(ctx, h); }
   }
+  if (groupe && invalides.length > 0) return { ok: true, message: TEXTES_CACHE_ONF.cachePret, compte: compte, raison: '', affichage: 'reouverture', invalides: invalides };
   return { ok: true, message: messageCacheReussi(compte, date), compte: compte, raison: '' };
 }
 

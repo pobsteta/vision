@@ -115,38 +115,21 @@ function maplayer(f) {
     </maplayer>`;
 }
 
-// ---------- Mission 053, étape 2 : groupe « ONF », trois couches WFS en ligne (arbitrages n° 2 à 4 de Pascal, 25 novembre 2026) ----------
-// Fiche pilotage/missions/053-couches-onf-wfs.md ; mesure docs/referentiels/brut/onf/mesure-2026-11-25.md ; docs/referentiels/cache-zone-qfield.md.
-// Version WFS : 1.0.0 imposée (version='1.0.0'), pas « auto ». Raisons : (1) c'est la version prouvée sur le Samsung (sonde, essais n° 1 à 4 :
-// GetFeature 1.0.0 + BBOX, GML lu, réécrit, relu) et celle que le plugin demande (plugin/vision-logique.mjs) ; (2) sans clé « version », le
-// fournisseur WFS négocie : GetCapabilities avec ACCEPTVERSIONS=2.0.0,1.1.0,1.0.0 (QGIS 3a92eb3 src/providers/wfs/qgswfsdatasourceuri.cpp l. 331-335
-// version() rend « auto » ; qgswfsgetcapabilities.cpp l. 56-58), forme que la mesure n° 1 n'a pas essayée (elle a demandé VERSION=x, pas
-// ACCEPTVERSIONS) ; (3) les 3 versions sont servies sans exception, mais 1.1.0 et 2.0.0 ajoutent l'ordre des axes (urn EPSG) et la pagination, non
-// prouvés sur l'appareil. Prix de tenir 1.0.0 : pas de pagination ni de comptage (hits) côté fournisseur (supportsPaging et supportsHits viennent du
-// GetCapabilities, qgswfsgetcapabilities.cpp l. 179, 241, 313) ; la requête est limitée par restrictToRequestBBOX='1' (qgswfsdatasourceuri.cpp
-// l. 467-468, clé connue l. 186) à l'emprise visible, d'où le seuil des parcelles et des points (1:50 000, posé dans le style).
-// Clés de l'URI : url, typename, version, srsname, restrictToRequestBBOX (qgswfsconstants.cpp l. 28-53 ; liste des clés connues
-// qgswfsdatasourceuri.cpp l. 175-200). Écrites par ordre alphabétique de clé, comme QgsDataSourceUri::uri().
-// Non prouvé : l'affichage de ces couches dans QField 4.3.8 (fournisseur WFS de QGIS sur Android) : essai de Pascal (cache-zone-qfield.md § 13).
-// Étape 3 (demande de Pascal, 25 novembre 2026) : le groupe « ONF » devient « ONF WFS » ; le groupe « ONF Cache », au-dessus, porte les trois
-// couches du cache (GeoPackage à chemin fixe que le plugin remplit : docs/referentiels/cache-zone-qfield.md § 14, voie C4). Les deux groupes
-// sont cochés par défaut (arbitrage de Pascal, 26 novembre 2026 : cache et WFS se superposent avec réseau, aux mêmes styles).
-export const GROUPE_ONF = 'ONF WFS';
+// ---------- Mission 053 : groupe « ONF Cache » (trois couches GeoPackage à chemin fixe que le plugin remplit) ----------
+// Fiche pilotage/missions/053-couches-onf-wfs.md ; docs/referentiels/cache-zone-qfield.md § 14 et § 15 (voie C4).
+// Arbitrage de Pascal du 26 novembre 2026, après l'essai Samsung du temps 3 : le groupe « ONF WFS » (trois couches WFS en ligne de l'étape 2) est
+// RETIRÉ de vision.qgz : hors réseau, QField affichait « Impossible de charger certaines couches » à cause d'elles ; le cache, fait avec réseau par le
+// plugin (GetFeature lui-même, sans passer par le projet), est la seule source ONF du projet. Aucune couche WFS ici (garde de test).
 export const GROUPE_ONF_CACHE = CACHE_ONF.groupe;
-export const SERVICE_ONF = 'http://ws.carmencarto.fr/WFS/105/ONF_Forets';
-export const VERSION_WFS_ONF = '1.0.0';
 export const ATTRIBUTION_ONF = '© ONF';
 // Du dessus au dessous : les points au-dessus des parcelles, elles-mêmes au-dessus des forêts. Emprises : mesure n° 1 (EPSG:2154, ordre x puis y).
-// Mêmes noms que les couches du cache du plugin (Pascal, 25 novembre 2026) : le plugin ne retrouve ni ne retire une couche du cache par son nom, seulement par les marques vision/cache et vision/couche (Vision.qml coucheDuCache, retirerCacheDeLaCarte, coucheDuProjet). Seuil : parcelles et points en deçà du 1:50 000
-// (dans le style adapté) ; forêts WFS visibles en deçà du 1:250 000 (Pascal, 25 novembre 2026 : une carte dézoomée ne demande pas toute la métropole),
-// seuil posé ici sur la couche du projet, jamais dans le style, qui reste celui du cache (forêts toujours visibles) ; toutes cochées (arbitrage n° 2).
+// Seuils : parcelles et points en deçà du 1:50 000 (posé dans le style adapté) ; forêts visibles à toutes les échelles (Pascal, 26 novembre 2026) ;
+// toutes cochées.
 export const COUCHES_ONF = [
   { couche: 'PRS_FR', nom: 'Points de secours (© ONF)', geometrie: 'Point', emprise: [140481.019, 6092810.07075, 1225571.643, 7083465], visible: true },
   { couche: 'PARC_PUBL_FR', nom: 'Parcelles forestières (© ONF)', geometrie: 'Polygon', emprise: [126014.2, 6137906.3, 1206122.9, 7085843.4], visible: true },
-  { couche: 'FOR_PUBL_FR', nom: 'Forêts publiques (© ONF)', geometrie: 'Polygon', emprise: [126014.2, 6061982.5, 1239155.4, 7085843.4], visible: true, minScale: 250000 },
+  { couche: 'FOR_PUBL_FR', nom: 'Forêts publiques (© ONF)', geometrie: 'Polygon', emprise: [126014.2, 6061982.5, 1239155.4, 7085843.4], visible: true },
 ];
-export const sourceOnf = (c) => `restrictToRequestBBOX='1' srsname='EPSG:2154' typename='${c.couche}' url='${SERVICE_ONF}' version='${VERSION_WFS_ONF}'`;
-const idOnf = (c) => idCouche({ nom: c.couche });
 const idCache = (c) => idCouche({ nom: 'ONF Cache ' + c.couche });
 
 // Marques lues par le plugin (Vision.qml coucheDuGroupe) : propriétés de la couche, dans la section du style de Pascal (une seule).
@@ -156,20 +139,19 @@ function marquerCache(corps, couche) {
   return corps.replace(motif, (m) => `${m}\n        <Option name="vision/cache" value="onf" type="QString"/>\n        <Option name="vision/couche" value="${couche}" type="QString"/>`);
 }
 
-// Couche WFS (cache = faux) ou couche du cache, GeoPackage à chemin fixe (cache = vrai : même style, même nom, mêmes seuils du style, lecture seule).
-function maplayerOnf(c, cache = false) {
+// Couche du cache, GeoPackage à chemin fixe : style adapté du plugin, nom validé, lecture seule.
+function maplayerOnf(c) {
   const style = STYLES_ONF[c.couche];
   const m = /<qgis ([^>]*)>([\s\S]*)<\/qgis>\s*$/.exec(style);
   if (!m) throw new Error(`style ONF ${c.couche} : élément <qgis> introuvable`);
   // Attributs du style (échelles, étiquettes, simplification) repris tels quels sur la couche, sauf version (de QGIS) et readOnly (lecture seule).
-  const surcharge = !cache && c.minScale ? { hasScaleBasedVisibilityFlag: '1', minScale: String(c.minScale) } : {}; // seuil du projet, plus fort que celui du style
-  const attrs = [...m[1].matchAll(/(\w+)="([^"]*)"/g)].filter((a) => a[1] !== 'version' && a[1] !== 'readOnly').map((a) => `${a[1]}="${surcharge[a[1]] ?? a[2]}"`);
+  const attrs = [...m[1].matchAll(/(\w+)="([^"]*)"/g)].filter((a) => a[1] !== 'version' && a[1] !== 'readOnly').map((a) => `${a[1]}="${a[2]}"`);
   const [x0, y0, x1, y1] = c.emprise;
   const corps = m[2].replace(/^\n+/, '').replace(/\n+$/, '');
   return `    <maplayer ${attrs.join(' ')} geometry="${c.geometrie}" readOnly="1" type="vector">
       <extent><xmin>${x0}</xmin><ymin>${y0}</ymin><xmax>${x1}</xmax><ymax>${y1}</ymax></extent>
-      <id>${cache ? idCache(c) : idOnf(c)}</id>
-      <datasource>${xml(cache ? cacheSourceProjet(c.couche) : sourceOnf(c))}</datasource>
+      <id>${idCache(c)}</id>
+      <datasource>${xml(cacheSourceProjet(c.couche))}</datasource>
       <keywordList><value></value></keywordList>
       <layername>${xml(c.nom)}</layername>
       <srs>${SRS_2154}</srs>
@@ -187,11 +169,11 @@ function maplayerOnf(c, cache = false) {
         <extent/>
         <rights>${xml(ATTRIBUTION_ONF)}</rights>
       </resourceMetadata>
-      <provider encoding="UTF-8">${cache ? 'ogr' : 'WFS'}</provider>
+      <provider encoding="UTF-8">ogr</provider>
       <map-layer-style-manager current="default"><map-layer-style name="default"/></map-layer-style-manager>
       <attribution>${xml(ATTRIBUTION_ONF)}</attribution>
       <attributionUrl></attributionUrl>
-${cache ? marquerCache(corps, c.couche) : corps}
+${marquerCache(corps, c.couche)}
     </maplayer>`;
 }
 
@@ -367,14 +349,6 @@ export function ecrireQgs(visionId = VISION_ID_PAR_DEFAUT) {
       <customproperties><Option/></customproperties>
     </layer-tree-layer>
 `;
-  const feuillesOnf = COUCHES_ONF.map((c) => `      <layer-tree-layer id="${idOnf(c)}" name="${xml(c.nom)}" source="${xml(sourceOnf(c))}" providerKey="WFS" expanded="1" checked="${c.visible ? 'Qt::Checked' : 'Qt::Unchecked'}" legend_exp="" patch_size="-1,-1" legend_split_behavior="0">
-        <customproperties><Option/></customproperties>
-      </layer-tree-layer>`).join('\n');
-  const groupeOnf = `    <layer-tree-group name="${xml(GROUPE_ONF)}" checked="Qt::Checked" expanded="1">
-      <customproperties><Option/></customproperties>
-${feuillesOnf}
-    </layer-tree-group>
-`;
   const feuillesCache = COUCHES_ONF.map((c) => `      <layer-tree-layer id="${idCache(c)}" name="${xml(c.nom)}" source="${xml(cacheSourceProjet(c.couche))}" providerKey="ogr" expanded="1" checked="Qt::Checked" legend_exp="" patch_size="-1,-1" legend_split_behavior="0">
         <customproperties><Option/></customproperties>
       </layer-tree-layer>`).join('\n');
@@ -383,14 +357,13 @@ ${feuillesOnf}
 ${feuillesCache}
     </layer-tree-group>
 `;
-  const arbre = feuilleSaisie + groupeCache + groupeOnf + `    <layer-tree-group name="${xml(GROUPE_FONDS)}" checked="Qt::Checked" expanded="1">
+  const arbre = feuilleSaisie + groupeCache + `    <layer-tree-group name="${xml(GROUPE_FONDS)}" checked="Qt::Checked" expanded="1">
       <customproperties><Option/></customproperties>
 ${feuilles}
     </layer-tree-group>
     <custom-order enabled="0">
       <item>${idSaisie()}</item>
 ${COUCHES_ONF.map((c) => `      <item>${idCache(c)}</item>`).join('\n')}
-${COUCHES_ONF.map((c) => `      <item>${idOnf(c)}</item>`).join('\n')}
 ${FONDS.map((f) => `      <item>${idCouche(f)}</item>`).join('\n')}
     </custom-order>`;
   // has-checked-group-info="1" + checked-group-nodes : appliquer le thème recoche le groupe « Fonds de carte » (QGIS 3a92eb3,
@@ -430,13 +403,11 @@ ${arbre}
   <projectlayers>
 ${maplayerSaisie()}
 ${COUCHES_ONF.map((c) => maplayerOnf(c)).join('\n')}
-${COUCHES_ONF.map((c) => maplayerOnf(c, true)).join('\n')}
 ${FONDS.map(maplayer).join('\n')}
   </projectlayers>
   <layerorder>
     <layer id="${idSaisie()}"/>
 ${COUCHES_ONF.map((c) => `    <layer id="${idCache(c)}"/>`).join('\n')}
-${COUCHES_ONF.map((c) => `    <layer id="${idOnf(c)}"/>`).join('\n')}
 ${FONDS.map((f) => `    <layer id="${idCouche(f)}"/>`).join('\n')}
   </layerorder>
   <properties>

@@ -186,6 +186,10 @@ avec retour arrière, `reload()`, GeoPackage vides dans `projet-vision.zip` seul
 fichiers manquants créés par le plugin, migration du cache existant, consigne « plugin d'abord, puis vision.qgz ») ;
 groupes « ONF Cache » et « ONF WFS » **cochés tous les deux** par défaut ; **sonde courte sur le Samsung d'abord**.
 
+**Arbitrages de Pascal après l'essai du temps 3 (26 novembre 2026)** : groupe « ONF WFS » retiré de `vision.qgz` (hors réseau, ses couches
+donnaient « Impossible de charger certaines couches » ; le cache est la seule source ONF du projet) ; texte validé pour une couche du cache invalide au
+moment du bouton : « Cache ONF prêt : fermez puis rouvrez le projet pour l'afficher. » ; forêts du cache visibles à toutes les échelles.
+
 ## Terrain
 
 Sur le Samsung : avec réseau, les trois couches s'affichent aux styles fournis, Parcelles et Points

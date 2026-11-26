@@ -302,14 +302,42 @@ test('registre non écrit après une bascule réussie : bascule défaite (renomm
   assert.deepEqual(CODES.map((c) => f.couchesProjet[c].n), [2, 7, 0]);
 });
 
-test('couche du projet invalide (fichier absent ou illisible à l\'ouverture) : refus avant tout, rien n\'est écrit ni renommé', () => {
-  const f = fauxGroupe({ panne: { invalide: 'PRS_FR' } });
+const TEXTE_PRET = 'Cache ONF prêt : fermez puis rouvrez le projet pour l\'afficher.';
+
+test('texte validé par Pascal (26 novembre 2026) : « Cache ONF prêt : fermez puis rouvrez le projet pour l\'afficher. », dans TEXTES_CACHE_ONF et dans la fiche', () => {
+  assert.equal(L.TEXTES_CACHE_ONF.cachePret, TEXTE_PRET);
+  assert.ok(lire('pilotage/missions/053-couches-onf-wfs.md').includes('« ' + TEXTE_PRET + ' »'));
+});
+
+test('couche du projet invalide au bouton (fichier absent créé à l\'instant, illisible) : le cache est bien écrit à actuel/ (la couche invalide ne se relit pas), texte « Cache ONF prêt… »', () => {
+  const f = fauxGroupe({ actuel: { FOR_PUBL_FR: 2, PARC_PUBL_FR: 7, PRS_FR: 0 }, panne: { invalide: 'PRS_FR' } });
+  const r = L.cacheEnregistrer(f.ctx);
+  assert.equal(r.ok, true, r.raison);
+  assert.equal(r.message, TEXTE_PRET);
+  assert.equal(r.affichage, 'reouverture');
+  for (const c of CODES) assert.equal(f.disque.get(`${ACTUEL}/${c}.gpkg`).n, NB[c], `${c} : cache à actuel/`);
+  assert.deepEqual(CODES.map((c) => f.couchesProjet[c].n), [4, 53, 0], 'les couches valides affichent déjà le nouveau cache, l\'invalide attend la réouverture');
+  assert.deepEqual(f.registre().map((e) => [e.chemin, e.objets]), CODES.map((c) => [`actuel/${c}.gpkg`, NB[c]]), 'registre à jour : à la réouverture le cache est là');
+  assert.ok(!f.disque.has(`${CACHE}/${H}/PRS_FR.avant.gpkg`) && !f.disque.has(`${CACHE}/${H}/FOR_PUBL_FR.avant.gpkg`), 'sauvegardes effacées');
+  sansSurprise(f);
+});
+
+test('couches du projet toutes invalides, fichiers absents : cache posé à actuel/ sans sauvegarde, texte « Cache ONF prêt… »', () => {
+  const f = fauxGroupe({ actuel: {} });
+  for (const c of CODES) f.couchesProjet[c].isValid = false;
+  const r = L.cacheEnregistrer(f.ctx);
+  assert.equal(r.ok, true, r.raison);
+  assert.equal(r.message, TEXTE_PRET);
+  assert.equal(f.disque.get(`${ACTUEL}/PARC_PUBL_FR.gpkg`).n, 53);
+  assert.ok(!f.journal.some((x) => /avant\.gpkg/.test(x)));
+});
+
+test('couche invalide ET renommage refusé : retour arrière, texte validé d\'échec (jamais « prêt » à tort)', () => {
+  const f = fauxGroupe({ actuel: { FOR_PUBL_FR: 2, PARC_PUBL_FR: 7, PRS_FR: 0 }, panne: { invalide: 'PRS_FR', renommerVers: [`${ACTUEL}/PARC_PUBL_FR.gpkg`] } });
   const r = L.cacheEnregistrer(f.ctx);
   assert.equal(r.ok, false);
   assert.equal(r.message, L.TEXTES_CACHE_ONF.echecLocal);
-  assert.match(r.raison, /invalide/);
-  assert.ok(!f.journal.some((x) => /^(écrit|renommé|réécrit)/.test(x)));
-  assert.deepEqual(f.registre(), []);
+  assert.equal(f.disque.get(`${ACTUEL}/FOR_PUBL_FR.gpkg`).n, 2);
 });
 
 test('un seul des trois fichiers actuels absent (couche valide à l\'ouverture, fichier effacé depuis) : pas de sauvegarde pour lui, bascule faite', () => {

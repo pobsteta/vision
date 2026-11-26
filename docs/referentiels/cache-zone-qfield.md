@@ -815,3 +815,26 @@ du cache rechargées en tête de liste n'ont plus de `.qml` voisin, donc le styl
 | 5 | Mode avion, bouton | « Pas de réseau… », l'ancien cache reste | capture |
 | 6 | **Appareil en service** (projet d'une version précédente, avec un cache en génération `<horodatage>/`) : mettre à jour le plugin, ouvrir l'ancien projet (3 `.gpkg` vides créés dans `actuel/`), copier le nouveau `vision.qgz`, rouvrir | aucune page d'erreur ; l'ancien cache est dans « ONF Cache » (migré) ; ligne du panneau inchangée | capture ; page d'erreur : noter l'ordre suivi |
 
+
+### 15 bis. Temps 4 : après l'essai Samsung du temps 3 (26 novembre 2026)
+
+Essai (tests 1 à 6 réussis, `docs/referentiels/brut/onf/essai-c4-2026-11-26/`) et arbitrages de Pascal (journal) :
+
+- **Groupe « ONF WFS » retiré de `vision.qgz`** : plus aucune couche `provider="WFS"` (garde de test) ; le cache est la seule source ONF du projet. Les
+  mentions « ONF WFS » et les couches WFS des §§ 13.1 et 15 sont historiques. Le plugin n'a jamais dépendu des couches WFS du projet (il interroge le service
+  lui-même). Un ancien `vision.qgz` garde son groupe « ONF » WFS tant qu'il n'est pas remplacé.
+- **Texte validé « Cache ONF prêt : fermez puis rouvrez le projet pour l'afficher. »** (`TEXTES_CACHE_ONF.cachePret`) : affiché, en mode groupe, quand le
+  bouton réussit alors qu'au moins une couche du projet était **invalide au moment du bouton** (fichier absent créé à l'instant, fichier illisible). Dans
+  ce cas le cache est bien posé à `actuel/` (génération contrôlée, renommages, registre à jour) ; les couches valides le montrent aussitôt, la couche
+  invalide le lira à la réouverture (`reload()` ne la répare pas). Un renommage refusé ou un écart de relecture sur une couche valide donne toujours le
+  texte d'échec validé, jamais « prêt » à tort. **Non essayé sur le Samsung** : que la couche invalide se relise bien à la réouverture.
+- **Mode ancien, styles absents (test 6a)** : le code du mode ancien est identique à celui du temps 1 ter (la génération y écrit le `.qml` voisin
+  avant de rouvrir le GeoPackage ; seul le mode groupe n'en écrit plus ; `tests/cache-onf-053.test.mjs` le vérifie). La cause du style perdu n'est donc pas
+  lisible dans le code : à retester (voir la question à Pascal). L'ordre (points en tête, parcelles et forêts sous « Saisie terrain ») vient de
+  `ProjectUtils.addMapLayer`, appelé trois fois comme au temps 1 ter ; non corrigé.
+- **Groupes décochés après la mise à jour (test 6c)** : cause lue dans QField v4.3.8. `QfProjectInfo::saveLayerTreeState` (`src/core/qfprojectinfo.cpp`
+  l. 256-277) enregistre l'état de la légende **par chemin de projet** dans les réglages de l'appareil (`/qgis/projectInfo/<projet>/layertreestate`), et
+  `restoreSettings` (l. 587-601, appelé en fin de chargement par `qgismobileapp.cpp` l. 969-1010) le réapplique **par-dessus le `.qgz`** (thème
+  `::QFieldLayerTreeState`) ; ce qui n'y figure pas (les nouveaux groupes) est décoché. La cause n'est donc pas dans notre `vision.qgz`, qui déclare bien les
+  groupes cochés. Un projet neuf n'est pas touché. Pas de correction possible côté `.qgz` ; le plugin ne peut pas cocher un groupe (arbre non exposé) :
+  consigne à l'agent (cocher « ONF Cache » après une mise à jour du `vision.qgz`), à écrire par l'archiviste.
