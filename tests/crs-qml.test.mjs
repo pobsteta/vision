@@ -105,8 +105,8 @@ test('forme : vision-logique.mjs sans ?., ?? ni import', () => {
   const code = sansCommentaires(lire('vision-logique.mjs'));
   assert.doesNotMatch(code, /\?\./); assert.doesNotMatch(code, /\?\?/); assert.doesNotMatch(code, /^\s*import\s/m);
 });
-test('version et préversion : 0.8.0, branche de la mission dans release-plugin.yml', () => {
-  assert.equal(L.VERSION, '0.8.0');
-  assert.match(lire('metadata.txt'), /^version=0\.8\.0$/m);
+test('version et préversion : 0.9.0, branche de la mission dans release-plugin.yml', () => {
+  assert.equal(L.VERSION, '0.9.0');
+  assert.match(lire('metadata.txt'), /^version=0\.9\.0$/m);
   assert.match(readFileSync(resolve(PLUGIN, '../.github/workflows/release-plugin.yml'), 'utf8'), /'mission\/050-vision'/);
 });

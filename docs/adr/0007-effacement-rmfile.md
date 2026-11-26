@@ -57,3 +57,17 @@ chemin vérifié avant chaque appel. La liste des fichiers à effacer **se dédu
 **Question ouverte (mission 014)** : effacement du dossier `cerf-imports/<nom du zip>/` une
 fois vide, et remplacement du dossier du zip à un réimport, ne sont pas décidés pour la voie
 `saveVectorLayerAs` (l'API des plugins n'offre ni listage ni renommage). À trancher par Pascal.
+
+## Amendement du 26 novembre 2026 (mission 014, décision de Pascal ; ajout, rien n'est effacé)
+
+La « Question ouverte (mission 014) » ci-dessus est **tranchée** le 26 novembre 2026 :
+
+- **Dossier du zip vide** : le plugin **le laisse en place et se tait**. Aucune fonction sûre ne
+  l'efface : `platformUtilities.removeDataset` ouvre une boîte de confirmation de QField, en anglais,
+  à chaque retrait (non essayée sur l'appareil) ; `removeFolder` (récursif) et `FileUtils.deleteFiles`
+  sont écartés comme dangereux. Limite écrite dans la documentation. Preuve :
+  `docs/referentiels/effacer-dossier-qfield.md`.
+- **Remplacement au réimport** : voir l'amendement du 26 novembre 2026 de l'ADR 0008 (fichier par
+  fichier, non plus dossier entier).
+- **Annexes** (`-wal`, `-shm`, `.aux.xml`) d'une couche gardée : effacées par `rmFile` avant sa réécriture
+  (même limite : rien hors du dossier des imports du projet).
