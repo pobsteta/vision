@@ -31,6 +31,11 @@ _Modèle de carte :_
 
 ## Validé
 
+- [054-vider-cache-onf](missions/054-vider-cache-onf.md) · depuis le cycle 7 · **validée par Pascal le 26 novembre 2026** (fiche d'abord proposée dans la PR #59)
+  - Homme : `dev` (preuve, textes proposés, réalisation), puis `relecteur`
+  - Mission : bouton « Vider le cache ONF » avec confirmation, sans toucher aux zips importés ni à saisie.gpkg
+  - Moyens : spec § 3.3, § 3.6, cache-zone-qfield.md § 14-15 ; textes validés par Pascal avant le code
+
 
 ## Planifié
 
