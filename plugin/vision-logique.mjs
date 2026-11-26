@@ -1026,8 +1026,12 @@ function cheminsProteges(dossier, autres) {
 // qui existaient et sont restés (ordre de SUFFIXES_COUCHE), et `nonVerifiable` quand le service `existe`
 // manque : rien n'est alors tenté (la réponse de l'effacement n'est jamais crue : on vérifie avant et
 // après). Ne lève jamais.
+// Mission 014 (décision de Pascal, 26 novembre 2026) : au réimport, seules ces annexes d'une couche gardée sont
+// effacées avant la réécriture de son .gpkg ; le .gpkg et le .qml ne le sont jamais ici.
+const ANNEXES_COUCHE = ['.gpkg-wal', '.gpkg-shm', '.gpkg.aux.xml'];
 const PHRASE_NON_VERIFIABLE = 'Effacement non vérifiable : fichiers peut-être restés.';
-function effacerFichiersDeCouche(ctx, zip, couche, autres) {
+function effacerFichiersDeCouche(ctx, zip, couche, autres, suffixes) {
+  const liste = Array.isArray(suffixes) ? suffixes : SUFFIXES_COUCHE;
   const restes = [];
   const bilan = { restes, nonVerifiable: false };
   try {
@@ -1040,8 +1044,8 @@ function effacerFichiersDeCouche(ctx, zip, couche, autres) {
     if (typeof ctx.effacerFichier === 'function') rm = ctx.effacerFichier;
     else if (ctx.platformUtilities && typeof ctx.platformUtilities.rmFile === 'function') rm = (c) => ctx.platformUtilities.rmFile(c);
     const proteges = cheminsProteges(dossier, autres);
-    for (let i = 0; i < SUFFIXES_COUCHE.length; i++) {
-      const chemin = dossier + '/' + dossierDuZip(zip) + '/' + couche + SUFFIXES_COUCHE[i];
+    for (let i = 0; i < liste.length; i++) {
+      const chemin = dossier + '/' + dossierDuZip(zip) + '/' + couche + liste[i];
       if (Object.prototype.hasOwnProperty.call(proteges, chemin)) continue;
       if (!peutEffacer(chemin, dossier)) continue;
       try { if (!ctx.existe(chemin)) continue; } catch (e) { continue; }
@@ -1269,6 +1273,15 @@ function importerZipSuivi(ctx, suivi) {
       });
       chargees.push({ couche: c.couche, entree: c.entree, source, style: STYLE_DEFAUT });
       continue;
+    }
+    // Mission 014 : couche gardée (déjà au registre) = ses annexes -wal, -shm, .aux.xml sont effacées avant la réécriture
+    // de son .gpkg. Si l'une résiste, la couche n'est pas réécrite : ancienne copie et registre inchangés, fichier nommé.
+    const etaitGardee = anciennes.some((x) => x && typeof x === 'object' && memeCouche(x, nomZip, c.couche) && typeof x.chemin === 'string');
+    if (etaitGardee) {
+      const autresEntrees = lireRegistre(ctx.reglages, ctx.visionId).filter((x) => !memeCouche(x, nomZip, c.couche));
+      const bilanAnnexes = effacerFichiersDeCouche(ctx, nomZip, c.couche, autresEntrees, ANNEXES_COUCHE);
+      noterEffacement(bilanEfface, bilanAnnexes);
+      if (bilanAnnexes.restes.length > 0) { suivi.liberer(r.couche); continue; }
     }
     const cp = copierEtStyler(ctx, r.couche, c, nomZip, noms, suivi);
     // La couche ouverte dans le zip n'est jamais celle de la carte (la copie GeoPackage l'est) : libérée sans attendre.

@@ -119,8 +119,17 @@ Ces référentiels sont à rassembler par l'`acquereur` (§ 8).
   (Pascal, 3 novembre 2026, sur proposition des tests de la mission 007).
 - **Zip réimporté sous le même nom** : la nouvelle copie remplace l'ancienne ; les couches
   vecteur sont **réécrites** (ADR 0008) ; les GeoTIFF du registre qui en viennent sont
-  rechargés. Le sort du dossier `vision-imports/<nom du zip>/` au réimport reste une question
-  ouverte (mission 014, ADR 0007 amendée). **Ancien `.qml`** : effacé avant l'écriture de la
+  rechargés. **Dossier `vision-imports/<nom du zip>/`** (mission 014, décisions de Pascal du
+  26 novembre 2026) : les fichiers des couches disparues du zip sont effacés, ceux des couches
+  gardées sont réécrits ; avant la réécriture d'une couche gardée, ses annexes `-wal`, `-shm` et
+  `.aux.xml` sont effacées (jamais son `.gpkg`). Si une annexe refuse de s'effacer, **la couche
+  n'est pas réécrite** (ancienne copie, registre et carte inchangés) et la ligne « Fichiers restés
+  sur l'appareil : … » la nomme. **Limite : dossier vide laissé** (décision de Pascal du
+  26 novembre 2026) : le plugin n'efface jamais de dossier, ni au retrait de la dernière couche ni
+  au réimport, et n'en dit rien. Raison : la seule voie, `platformUtilities.removeDataset` de
+  QField v4.3.8, existe mais ouvre à chaque appel une boîte de confirmation en anglais
+  (`docs/referentiels/effacer-dossier-qfield.md`) ; `removeFolder` et `FileUtils.deleteFiles`,
+  récursifs, sont écartés comme dangereux. **Ancien `.qml`** : effacé avant l'écriture de la
   nouvelle copie, voir § 5.
 - **Zip absent à l'ouverture** (carte SD retirée, copie effacée) : ne vaut plus que pour les
   **GeoTIFF** et les anciennes entrées (`chemin_vsi`) : l'entrée **reste** au registre ; un
@@ -155,7 +164,7 @@ Ces référentiels sont à rassembler par l'`acquereur` (§ 8).
     nom.
   - **Registre partagé** : la clé `vision/<vision_id>` est commune à tous les projets Vision d'un appareil (constaté à l'essai du 26 novembre 2026) ;
     voir § 3.6 et § 11 n° 12.
-  - **Limites connues** : dossiers de génération vides laissés sur l'appareil (aucune fonction d'effacement de dossier exposée ; acceptée par Pascal, 26 novembre 2026) ; une
+  - **Limites connues** : dossiers de génération vides laissés sur l'appareil (le seul effacement de dossier de QField, `removeDataset`, ouvre une boîte de confirmation : non utilisé, voir § 3.3 ; acceptée par Pascal, 26 novembre 2026) ; une
     version plus ancienne du plugin (< 0.7.0) retirerait les entrées du cache du registre (« douteuses ») sans effacer les fichiers.
 - **QField désinstallé ou appareil perdu** : registre et copies disparaissent. Accepté :
   les couches sont en lecture seule, le zip d'origine reste chez JFC.
@@ -310,8 +319,7 @@ autres sont décochés. Le **cadastre est au-dessus de tous les fonds** et visib
 - **Licence** : accord de l'ONF **rapporté par Pascal, sans pièce écrite** (décision du 25 novembre 2026). Licence des fiches de métadonnées : non lue.
 - **Le cache n'est pas un zip** : son entrée au registre et le nom réservé `_cache-onf.zip` sont au § 3.3. **Aucune clé ; aucune couche de l'ONF dans
   le dépôt** : seules des pièces d'essai (captures, GetCapabilities, comptes rendus) y sont versées.
-- **Limites acceptées (Pascal, 26 novembre 2026)** : un **dossier de génération vide** reste à chaque cache (aucune fonction d'effacement de dossier
-  exposée) ; en **mode ancien**, les **styles du cache peuvent manquer** (essai 6a ; limite transitoire, réparée par la copie du nouveau `vision.qgz` ;
+- **Limites acceptées (Pascal, 26 novembre 2026)** : un **dossier de génération vide** reste à chaque cache (le seul effacement de dossier de QField, `removeDataset`, ouvre une boîte de confirmation : non utilisé, § 3.3) ; en **mode ancien**, les **styles du cache peuvent manquer** (essai 6a ; limite transitoire, réparée par la copie du nouveau `vision.qgz` ;
   cause non cherchée) et l'ordre des trois couches y est celui d'`addMapLayer` ; après une mise à jour, « ONF Cache » est décoché (consigne ci-dessus) ;
   un retour à l'ancien `vision.qgz` après le passage au groupe laisse les couches sans style.
 - **Contradiction constatée à l'essai (registre partagé)** : le registre est clé par `vision_id`. Deux projets Vision sur un même appareil (cas de
@@ -641,7 +649,7 @@ autres résultats (Q2 à Q4) tiennent.
    (zips de 50 puis 95 Mo). La piste « lire seulement l'index du zip » reste ouverte. Rien n'est tranché ici.*
 2. **Mission 014 (registre complet)** : sort du dossier `vision-imports/<nom du zip>/` une fois vide (l'effacer ?) et
    remplacement du dossier entier au réimport (ADR 0007 amendée, ADR 0008 note du 4 novembre ; § 3.3). *À trancher par Pascal.*
-   *Tranché par Pascal le 26 novembre 2026 : dossier vide effacé, dossier entier remplacé au réimport ; mission 014 fusionnée avec la 013 (preuve avant code : effacement d'un dossier par le plugin, non prouvé).*
+   *Tranché par Pascal le 26 novembre 2026, puis corrigé le même jour après la preuve de QField v4.3.8 : dossier vide LAISSÉ (limite, § 3.3), annexes effacées au réimport ; d'abord « dossier vide effacé », dossier entier remplacé au réimport ; mission 014 fusionnée avec la 013 (preuve avant code : effacement d'un dossier par le plugin, non prouvé).*
 3. **Mission 013 (tests du registre complet)** : « Validé » depuis le 2 novembre 2026, jamais lancée ; ses tests portent sur le registre
    de la 014 (aucune PR). Faire, fusionner avec la 014 ou abandonner ? *À trancher par Pascal.*
    *Tranché par Pascal le 26 novembre 2026 : fusionnée avec la 014 (tests d'acceptation du testeur d'abord).*
