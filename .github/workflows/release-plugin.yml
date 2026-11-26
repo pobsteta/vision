@@ -18,7 +18,7 @@
 name: Release du plugin
 on:
   push:
-    branches: ['main', 'mission/050-vision', 'mission/052-styles-modeles']
+    branches: ['main', 'mission/050-vision', 'mission/052-styles-modeles', 'mission/054-vider-cache-onf']
     paths: ['plugin/**', 'tests/**', '.github/workflows/release-plugin.yml']
   workflow_dispatch:
 permissions:
