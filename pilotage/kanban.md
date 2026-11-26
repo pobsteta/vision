@@ -42,14 +42,14 @@ _Modèle de carte :_
 
 ## Planifié
 
-- [055-rappel-hors-ligne](missions/055-rappel-hors-ligne.md) · depuis le cycle 7 · validée et réalisée, relue « prête », **PR #64 à essayer sur le Samsung et à fusionner par Pascal** (plugin 0.8.0)
-  - Homme : `dev` (proposition du texte, puis réalisation), puis `relecteur`
-  - Mission : rappeler à l'agent, avant le terrain, de préparer le hors-ligne (fonds IGN, cache ONF de la zone du jour)
-  - Moyens : spec § 3.4, § 3.6, critère 5 de la recette ; texte validé par Pascal avant tout code
 
 
 ## Terminé
 
+- [055-rappel-hors-ligne](missions/055-rappel-hors-ligne.md) · depuis le cycle 7 · fusionnée (PR #64, 26 novembre 2026), plugin 0.8.0
+  - Homme : `dev` (proposition du texte, puis réalisation), puis `relecteur`
+  - Mission : rappeler à l'agent, avant le terrain, de préparer le hors-ligne (fonds IGN, cache ONF de la zone du jour)
+  - Moyens : spec § 3.4, § 3.6, critère 5 de la recette ; texte validé par Pascal avant tout code
 - [017-convention-zip](missions/017-convention-zip.md) · depuis le cycle 7 · fusionnée (PR #63, 26 novembre 2026) : `docs/preparer-son-zip.md`
   - Homme : `archiviste` (sonnet)
   - Mission : Convention du zip — cycle prévu 5
