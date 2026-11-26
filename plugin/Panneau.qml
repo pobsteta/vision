@@ -15,10 +15,12 @@ Item {
   property var hote: null      // main.qml (dernierMessage)
   property var couches: []
   property string ligneCache: ""
+  property string ligneRappel: ""
 
   function relire() {
     couches = vision ? vision.couchesInscrites() : [];
     ligneCache = vision ? vision.cacheLigne() : "";
+    ligneRappel = vision ? vision.rappelLigne() : "";
   }
 
   Component.onCompleted: relire()
@@ -67,6 +69,26 @@ Item {
         color: "black"
         font.pointSize: 16
         text: panneau.ligneCache
+      }
+
+      // Mission 055 : rappel « préparer le hors ligne » (textes validés par Pascal le 26 novembre 2026, Logique.TEXTES_RAPPEL) ;
+      // du texte, jamais une fenêtre.
+      Label {
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+        color: "black"
+        font.pointSize: 16
+        text: panneau.vision ? panneau.vision.texteRappel : ""
+      }
+
+      Label {
+        Layout.fillWidth: true
+        visible: panneau.ligneRappel !== ""
+        wrapMode: Text.WordWrap
+        color: "black"
+        font.bold: true
+        font.pointSize: 16
+        text: panneau.ligneRappel
       }
 
       Rectangle {
