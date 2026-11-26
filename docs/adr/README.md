@@ -17,7 +17,7 @@
 | [0006](0006-licence.md) | titre reformulé (voir le fichier) | acceptée par Pascal | 2 novembre 2026 | aucun |
 | [0007](0007-effacement-rmfile.md) | Effacer les copies de zip par `platformUtilities.rmFile` | acceptée par Pascal ; amendée par l'ADR 0008 ; critique du `contradicteur` à faire | 3 novembre 2026 | 4 novembre 2026 (amendée par l'ADR 0008) |
 | [0008](0008-couches-sorties-du-zip.md) | Couches sorties du zip, avec leur style écrit à côté | acceptée par Pascal (voie `saveVectorLayerAs`) ; amende l'ADR 0003 | 4 novembre 2026 | 4 novembre 2026 (critique et arbitrages, décision finale, note datée) ; 5 novembre 2026 (note) |
-| 0009 (fichier `0009-…` de ce dossier) | titre reformulé (voir le fichier) | décidée par Pascal (mission 050) | 5 novembre 2026 | aucun ; n'amende aucune ADR |
+| 0009 (fichier `0009-…` de ce dossier) | titre reformulé (voir le fichier) | décidée par Pascal (mission 050) | 5 novembre 2026 | amendée le 26 novembre 2026 (retrait du WFS, groupe « ONF Cache ») ; n'amende aucune autre ADR |
 | [0010](0010-couches-onf-wfs-et-cache-de-zone.md) | Couches ONF : WFS en ligne et cache de zone sur le mobile | acceptée par Pascal | 25 novembre 2026 | aucun ; n'amende aucune ADR |
 
 ## Ce que l'index ne dit pas

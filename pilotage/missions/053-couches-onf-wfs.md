@@ -5,8 +5,8 @@
 > prenant comme style les styles joints »). **Statut : validée par Pascal le 25 novembre 2026** (« je valide »).
 >
 > **Statut au 26 novembre 2026 (archiviste)** : étapes 1 à 3 faites, essai Samsung réussi (étape 3, temps 3 : tests 1 à 6 ; temps 4 : points A et B ;
-> point C non fait), documentation écrite (ADR 0010 amendée, spec § 3.3, § 3.6, § 11, README, notes de release) ; **reste** : retrait du déclencheur
-> temporaire de `release-plugin.yml`, relecture finale, PR vers `main` (Pascal). Le titre de la fiche (« WFS ») est historique : le WFS est retiré de
+> point C non fait, accepté par Pascal), documentation écrite (ADR 0010 amendée, spec § 3.3, § 3.6, § 11, README, notes de release) ; **reste** : validation de la PR vers `main` par Pascal
+> (déclencheur temporaire retiré, e2cd6a2 ; relecture d'ensemble faite) ; question ouverte : spec § 11 n° 12. Le titre de la fiche (« WFS ») est historique : le WFS est retiré de
 > `vision.qgz` (arbitrage du 26 novembre 2026). **Pièces** : `docs/referentiels/brut/onf/` (service, styles, sondes, mesure),
 > `docs/referentiels/brut/onf/essai-c4-2026-11-26/` et `docs/referentiels/brut/onf/essai-temps4-2026-11-26/` (essais Samsung),
 > `docs/referentiels/cache-zone-qfield.md` §§ 14, 15, 15 bis (preuves).
@@ -65,7 +65,9 @@ Mesure n° 1 : `docs/referentiels/brut/onf/mesure-2026-11-25.md` (service en WFS
 
 ## Mission
 
-**En une phrase :** Ajouter à `vision.qgz` un groupe « ONF » donnant les forêts publiques, les parcelles
+**En une phrase (telle qu'amendée et livrée, 26 novembre 2026) :** Donner à `vision.qgz` un groupe « ONF Cache » avec les forêts publiques, les parcelles forestières et les points de rencontre des secours de l'ONF, aux styles de Pascal, remplis par un **cache de zone** que l'agent fait avec réseau ; plus aucune couche WFS dans `vision.qgz` ; hors réseau, le projet s'ouvre sans page d'erreur et le cache s'affiche.
+
+*Formulation initiale, remplacée le 26 novembre 2026 :* Ajouter à `vision.qgz` un groupe « ONF » donnant les forêts publiques, les parcelles
 forestières et les points de rencontre des secours du service WFS de l'ONF, aux styles fournis par Pascal,
 lisibles **sans réseau** par une copie locale et à jour **avec réseau** par le WFS.
 
@@ -199,7 +201,9 @@ moment du bouton : « Cache ONF prêt : fermez puis rouvrez le projet pour l'aff
 
 ## Terrain
 
-Sur le Samsung : avec réseau, les trois couches s'affichent aux styles fournis, Parcelles et Points
+**Terrain tel que livré (26 novembre 2026)** : sur le Samsung, avec réseau, le bouton met la zone en cache ; en mode avion, ouverture sans page d'erreur et trois couches du cache dans « ONF Cache » (essais du 26 novembre, tests 1 à 6, points A et B ; flèches du point de secours non vérifiées).
+
+*Formulation initiale, remplacée le 26 novembre 2026 :* sur le Samsung, avec réseau, les trois couches s'affichent aux styles fournis, Parcelles et Points
 de secours en deçà du 1:50 000 ; hors réseau (mode avion), la copie locale s'affiche seule ; flèches
 du point de secours visibles (sinon, signaler).
 

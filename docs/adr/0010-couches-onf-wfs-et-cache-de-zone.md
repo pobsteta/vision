@@ -121,7 +121,7 @@ code). **Constatée à l'essai, non tranchée** : le registre est partagé entre
 contredit la règle « un seul `vision.qgz` par appareil » (spec § 3.3) : le cache d'un projet remplace celui d'un autre dans le registre.
 
 **Valeurs sacrifiées, mises à jour** : « le rangement » n'est plus sacrifié ; s'ajoutent le WFS en ligne (retiré) et la propreté du dossier du cache
-(dossiers de génération vides). **Reste à prouver** : le `.qml` voisin en mode ancien (point C du temps 4, non fait) et la tenue d'une zone proche
-des plafonds ; l'essai des couches WFS du projet n'a plus d'objet.
+(dossiers de génération vides). **Reste à prouver** : la tenue d'une zone proche
+des plafonds. **Limite acceptée, non diagnostiquée, aucun essai attendu** (Pascal, 26 novembre 2026) : le `.qml` voisin en mode ancien (point C du temps 4) ; l'essai des couches WFS du projet n'a plus d'objet.
 
 **Pièces** : `docs/referentiels/brut/onf/essai-c4-2026-11-26/` (tests 1 à 6), `docs/referentiels/brut/onf/essai-temps4-2026-11-26/` (points A et B).

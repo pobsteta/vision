@@ -308,8 +308,8 @@ autres sont décochés. Le **cadastre est au-dessus de tous les fonds** et visib
 - **Attribution** « © ONF » : dans le nom des trois couches (le plugin ne peut pas poser les droits d'une couche, `cache-zone-qfield.md` § 12) et dans
   `<rights>` des couches de `vision.qgz`.
 - **Licence** : accord de l'ONF **rapporté par Pascal, sans pièce écrite** (décision du 25 novembre 2026). Licence des fiches de métadonnées : non lue.
-- **Le cache n'est pas un zip** : son entrée au registre et le nom réservé `_cache-onf.zip` sont au § 3.3. **Aucune clé, aucune donnée de l'ONF dans
-  le dépôt.**
+- **Le cache n'est pas un zip** : son entrée au registre et le nom réservé `_cache-onf.zip` sont au § 3.3. **Aucune clé ; aucune couche de l'ONF dans
+  le dépôt** : seules des pièces d'essai (captures, GetCapabilities, comptes rendus) y sont versées.
 - **Limites acceptées (Pascal, 26 novembre 2026)** : un **dossier de génération vide** reste à chaque cache (aucune fonction d'effacement de dossier
   exposée) ; en **mode ancien**, les **styles du cache peuvent manquer** (essai 6a ; limite transitoire, réparée par la copie du nouveau `vision.qgz` ;
   cause non cherchée) et l'ordre des trois couches y est celui d'`addMapLayer` ; après une mise à jour, « ONF Cache » est décoché (consigne ci-dessus) ;
@@ -319,7 +319,7 @@ autres sont décochés. Le **cadastre est au-dessus de tous les fonds** et visib
   le cache de l'un remplace celui de l'autre. C'est contraire à la règle « un seul `vision.qgz` par appareil » (§ 3.3) : la règle est tenue par
   consigne, rien dans le code ne l'impose. Voir § 11 n° 12.
 - **Non prouvé à ce jour** : les flèches SVG (`arrows/Arrow_01.svg`) du style des points ; la tenue d'une zone proche des plafonds (20 km, 5 000
-  objets) ; le `.qml` voisin en mode ancien (point C du temps 4, non fait). Voir § 11 n° 10.
+  objets). **Limite acceptée, non diagnostiquée, aucun essai attendu** (Pascal, 26 novembre 2026) : styles du cache absents en mode ancien (point C du temps 4). Voir § 11 n° 10.
 
 ## 4. Contrôles à l'import (ADR 0004)
 
@@ -663,8 +663,8 @@ autres résultats (Q2 à Q4) tiennent.
    couches »), sans effet sur l'appareil. **Mission à proposer à Pascal** (seule voie lue : `addMapLayer` puis `removeMapLayer`, non
    essayée). *À trancher par Pascal.*
 10. **Couches ONF : essais restants (mission 053)** : flèches SVG du style des points, tenue d'une zone proche des plafonds (20 km, 5 000
-    objets), `.qml` voisin du cache en mode ancien (point C du temps 4, non fait), fond embarqué qui peut passer au-dessus du cache en mode ancien
-    (§ 3.4). Résultats attendus de Pascal. *Closes le 26 novembre 2026 : affichage des couches WFS du projet (WFS retiré) ; rangement du cache dans
+    objets), fond embarqué qui peut passer au-dessus du cache en mode ancien
+    (§ 3.4). Résultats attendus de Pascal. *Closes le 26 novembre 2026 : `.qml` voisin du cache en mode ancien (point C du temps 4 : accepté, transitoire, sans recherche de plus, Pascal) ; affichage des couches WFS du projet (WFS retiré) ; rangement du cache dans
     un groupe (voie C4 prouvée, groupe « ONF Cache ») ; seuil des forêts du cache (toutes échelles) ; double affichage cache + WFS (sans objet).*
 11. **Annulation du cache** : le cache n'a pas de bouton d'annulation (texte non validé) ; l'écran reste figé le temps de
     l'écriture (quelques secondes). *À trancher par Pascal si cela gêne.*
