@@ -332,6 +332,28 @@ test('couches du projet toutes invalides, fichiers absents : cache posé à actu
   assert.ok(!f.journal.some((x) => /avant\.gpkg/.test(x)));
 });
 
+test('couche invalide ET écart de relecture sur une couche valide : texte d\'échec (jamais « prêt »), registre inchangé, toutes les couches remises en place (PRS_FR comprise), génération effacée', () => {
+  const avant = { FOR_PUBL_FR: 2, PARC_PUBL_FR: 7, PRS_FR: 3 };
+  const f = fauxGroupe({ actuel: avant, panne: { invalide: 'PRS_FR', reloadSansEffet: 'PARC_PUBL_FR' } });
+  const r = L.cacheEnregistrer(f.ctx);
+  assert.equal(r.ok, false);
+  assert.equal(r.message, L.TEXTES_CACHE_ONF.echecLocal);
+  assert.notEqual(r.message, TEXTE_PRET);
+  assert.equal(r.affichage, undefined);
+  assert.match(r.raison, /PARC_PUBL_FR/);
+  for (const c of CODES) {
+    assert.equal(f.disque.get(`${ACTUEL}/${c}.gpkg`).n, avant[c], `${c} : ancien cache remis à actuel/`);
+    assert.ok(!f.disque.has(`${CACHE}/${H}/${c}.avant.gpkg`), `${c} : plus de sauvegarde`);
+  }
+  assert.deepEqual(f.registre(), [], 'registre inchangé');
+  // Contrat actuel : retour arrière complet = génération effacée ; l'invalide n'est pas rechargée, les valides le sont (bascule puis retour).
+  assert.ok(![...f.disque.keys()].some((k) => k.startsWith(`${CACHE}/${H}/`)), 'génération effacée');
+  assert.equal(f.couchesProjet.PRS_FR.rechargements, 0);
+  assert.equal(f.couchesProjet.FOR_PUBL_FR.rechargements, 2);
+  assert.deepEqual([f.couchesProjet.FOR_PUBL_FR.n, f.couchesProjet.PARC_PUBL_FR.n], [2, 7]);
+  sansSurprise(f);
+});
+
 test('couche invalide ET renommage refusé : retour arrière, texte validé d\'échec (jamais « prêt » à tort)', () => {
   const f = fauxGroupe({ actuel: { FOR_PUBL_FR: 2, PARC_PUBL_FR: 7, PRS_FR: 0 }, panne: { invalide: 'PRS_FR', renommerVers: [`${ACTUEL}/PARC_PUBL_FR.gpkg`] } });
   const r = L.cacheEnregistrer(f.ctx);

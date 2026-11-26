@@ -41,7 +41,9 @@ test('garde (arbitrage de Pascal, 26 novembre 2026) : aucune couche WFS dans vis
   assert.doesNotMatch(QGS, /ws\.carmencarto\.fr|typename=|restrictToRequestBBOX|srsname=/);
   assert.doesNotMatch(QGS, /ONF WFS/);
   for (const nom of ['GROUPE_ONF', 'SERVICE_ONF', 'VERSION_WFS_ONF', 'sourceOnf']) assert.equal(Modele[nom], undefined, `${nom} : reste du groupe WFS`);
-  assert.equal(blocs().filter((b) => /<provider[^>]*>(?!ogr|wms|gdal)[^<]*<\/provider>/.test(b)).length, 0);
+  // Liste blanche des fournisseurs admis dans vision.qgz (et non seulement « pas de WFS ») : ogr, wms, gdal. Tout autre échoue ici.
+  const hors = blocs().map((b) => b.match(/<provider[^>]*>([^<]*)<\/provider>/)[1].trim()).filter((p) => !['ogr', 'wms', 'gdal'].includes(p));
+  assert.deepEqual(hors, [], `fournisseur hors liste blanche (ogr, wms, gdal) dans vision.qgz : ${hors.join(', ')}`);
   // Le plugin interroge le service lui-même (GetFeature par le bouton) : cela ne passe pas par vision.qgz.
   assert.equal(CACHE_ONF.service, 'http://ws.carmencarto.fr/WFS/105/ONF_Forets');
 });
