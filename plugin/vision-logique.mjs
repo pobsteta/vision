@@ -12,7 +12,7 @@
 // Aucune fonction ne touche QField : tout passe par les objets reçus (réglages, chargerCouche,
 // existe, platformUtilities), que Vision.qml branche sur l'API de QField (plugin/PLAN.md § 5).
 
-export const VERSION = '0.8.0';
+export const VERSION = '0.9.0';
 
 // Mission 038 : comptage des entités par itérateur. Dans QGIS 3a92eb3, `featureCount()` (qgsvectorlayer.h l. 1701,
 // `long long featureCount() const final;`) n'est ni Q_PROPERTY ni Q_INVOKABLE : QML ne peut pas l'appeler. QField v4.3.7
@@ -1026,8 +1026,12 @@ function cheminsProteges(dossier, autres) {
 // qui existaient et sont restés (ordre de SUFFIXES_COUCHE), et `nonVerifiable` quand le service `existe`
 // manque : rien n'est alors tenté (la réponse de l'effacement n'est jamais crue : on vérifie avant et
 // après). Ne lève jamais.
+// Mission 014 (décision de Pascal, 26 novembre 2026) : au réimport, seules ces annexes d'une couche gardée sont
+// effacées avant la réécriture de son .gpkg ; le .gpkg et le .qml ne le sont jamais ici.
+const ANNEXES_COUCHE = ['.gpkg-wal', '.gpkg-shm', '.gpkg.aux.xml'];
 const PHRASE_NON_VERIFIABLE = 'Effacement non vérifiable : fichiers peut-être restés.';
-function effacerFichiersDeCouche(ctx, zip, couche, autres) {
+function effacerFichiersDeCouche(ctx, zip, couche, autres, suffixes) {
+  const liste = Array.isArray(suffixes) ? suffixes : SUFFIXES_COUCHE;
   const restes = [];
   const bilan = { restes, nonVerifiable: false };
   try {
@@ -1040,8 +1044,8 @@ function effacerFichiersDeCouche(ctx, zip, couche, autres) {
     if (typeof ctx.effacerFichier === 'function') rm = ctx.effacerFichier;
     else if (ctx.platformUtilities && typeof ctx.platformUtilities.rmFile === 'function') rm = (c) => ctx.platformUtilities.rmFile(c);
     const proteges = cheminsProteges(dossier, autres);
-    for (let i = 0; i < SUFFIXES_COUCHE.length; i++) {
-      const chemin = dossier + '/' + dossierDuZip(zip) + '/' + couche + SUFFIXES_COUCHE[i];
+    for (let i = 0; i < liste.length; i++) {
+      const chemin = dossier + '/' + dossierDuZip(zip) + '/' + couche + liste[i];
       if (Object.prototype.hasOwnProperty.call(proteges, chemin)) continue;
       if (!peutEffacer(chemin, dossier)) continue;
       try { if (!ctx.existe(chemin)) continue; } catch (e) { continue; }
@@ -1269,6 +1273,31 @@ function importerZipSuivi(ctx, suivi) {
       });
       chargees.push({ couche: c.couche, entree: c.entree, source, style: STYLE_DEFAUT });
       continue;
+    }
+    // Mission 014 : couche gardée (déjà au registre) = ses annexes -wal, -shm, .aux.xml sont effacées avant la réécriture
+    // de son .gpkg. Si l'une résiste, la couche n'est pas réécrite : ancienne copie et registre inchangés, fichier nommé.
+    const etaitGardee = anciennes.some((x) => x && typeof x === 'object' && memeCouche(x, nomZip, c.couche) && typeof x.chemin === 'string');
+    if (etaitGardee) {
+      const autresEntrees = lireRegistre(ctx.reglages, ctx.visionId).filter((x) => !memeCouche(x, nomZip, c.couche));
+      const bilanAnnexes = effacerFichiersDeCouche(ctx, nomZip, c.couche, autresEntrees, ANNEXES_COUCHE);
+      noterEffacement(bilanEfface, bilanAnnexes);
+      if (bilanAnnexes.restes.length > 0) {
+        suivi.liberer(r.couche);
+        // Décision de Pascal (26 novembre 2026) : la couche gardée a été retirée de la carte plus haut ; elle y revient depuis son
+        // ANCIENNE copie (fichier et registre inchangés), en lecture seule. Ouverture ratée : rien d'ajouté, rien d'inventé.
+        const ancienne = anciennes.find((x) => x && typeof x === 'object' && memeCouche(x, nomZip, c.couche) && typeof x.chemin === 'string');
+        const rendu = dossierCopies(ctx.dossierProjet) + '/' + ancienne.chemin;
+        const o = chargerSansPlanter(ctx.ouvrirCouche, rendu + '|layername=' + c.couche, c.couche, undefined, suivi.liberer);
+        suivi.suivre(o.couche);
+        if (o.couche) {
+          try {
+            o.couche.readOnly = true;
+            suivi.garder(o.couche);
+            ctx.ajouterALaCarte(o.couche, c.couche, rendu, nomZip);
+          } catch (e) { /* ajout impossible : la couche reste sur le disque et au registre, revient à la réouverture */ }
+        }
+        continue;
+      }
     }
     const cp = copierEtStyler(ctx, r.couche, c, nomZip, noms, suivi);
     // La couche ouverte dans le zip n'est jamais celle de la carte (la copie GeoPackage l'est) : libérée sans attendre.

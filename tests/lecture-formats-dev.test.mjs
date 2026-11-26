@@ -380,8 +380,8 @@ test('Vision.qml : aucune lecture de featureCount, isEmpty ni isValid() appelé 
 
 // ============================================================================ version
 
-test('version et préversion : 0.8.0, branche de la mission 050 dans release-plugin.yml', () => {
-  assert.equal(L.VERSION, '0.8.0');
-  assert.match(lire('plugin/metadata.txt'), /^version=0\.8\.0$/m);
+test('version et préversion : 0.9.0, branche de la mission 050 dans release-plugin.yml', () => {
+  assert.equal(L.VERSION, '0.9.0');
+  assert.match(lire('plugin/metadata.txt'), /^version=0\.9\.0$/m);
   assert.match(lire('.github/workflows/release-plugin.yml'), /'mission\/050-vision'/);
 });

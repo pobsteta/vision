@@ -667,9 +667,9 @@ test('Panneau.qml : un seul bouton de cache, plus de bouton d\'essai ni de texte
   assert.equal((p.match(/mettreEnCacheOnf\(\)/g) || []).length, 1);
 });
 
-test('version du plugin : 0.8.0 (mission 055)', () => {
-  assert.equal(L.VERSION, '0.8.0');
-  assert.match(lire('plugin/metadata.txt'), /version=0\.8\.0/);
+test('version du plugin : 0.9.0 (mission 014)', () => {
+  assert.equal(L.VERSION, '0.9.0');
+  assert.match(lire('plugin/metadata.txt'), /version=0\.9\.0/);
 });
 
 test('plugin/PLAN.md § 5 : bascule par renommage, couches du projet et GeoPackage vide, avec ce qui est prouvé et ce qui ne l\'est pas', () => {

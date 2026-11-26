@@ -133,3 +133,19 @@ règle du manuel et avertit (reporté, non abandonné, Pascal, 5 novembre 2026 ;
 Cela précise la phrase de « La décision en une phrase » (« celui du zip s'il existe, sinon celui de la
 règle du manuel ») et la ligne de la critique « `.qml` du zip à contrôler par le plugin avant de
 l'écrire » : l'une et l'autre restent l'intention visée, non l'état actuel. Le texte d'origine est conservé plus haut.
+
+## Amendement du 26 novembre 2026 (mission 014, décisions de Pascal ; ajout, rien n'est effacé)
+
+Tranche la question laissée ouverte dans la note du 4 novembre 2026 et corrige « Ce qui change » n° 1
+(« dossier remplacé en entier à un réimport réussi »), qui décrivait la voie par extraction. Pour la voie
+`saveVectorLayerAs`, au réimport :
+
+1. Le remplacement se fait **fichier par fichier** : chaque couche réimportée réécrit son `.gpkg`.
+2. Les **annexes** `-wal`, `-shm`, `.aux.xml` d'une couche gardée sont **effacées avant sa réécriture**.
+3. Si une annexe **résiste** à l'effacement, la couche est **gardée telle quelle** (rechargée depuis son
+   ancienne copie).
+4. Le **dossier vide est laissé** en place (variante B) : aucune fonction sûre ne l'efface
+   (`removeDataset` ouvre une boîte de confirmation ; `removeFolder` et `FileUtils.deleteFiles` sont
+   dangereux). Preuve : `docs/referentiels/effacer-dossier-qfield.md`.
+
+Voir aussi l'amendement du même jour de l'ADR 0007. Le texte d'origine est conservé plus haut.

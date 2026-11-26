@@ -95,8 +95,17 @@ la couche retirée ne revient pas ; le zip réimporté remplace l'ancien.
 
 ## Ajout du 4 novembre 2026 (Pascal)
 
-- Les messages de réouverture (couche qui ne se recharge pas, zip absent) commencent eux aussi
-  par le nom de la couche avec son extension (règle de la spec § 4, étendue au registre).
+- ~~Les messages de réouverture (couche qui ne se recharge pas, zip absent) commencent eux aussi
+  par le nom de la couche avec son extension (règle de la spec § 4, étendue au registre).~~
+  **Remplacé le 26 novembre 2026** : un message unique à la réouverture (texte validé par Pascal, voir spec § 3.3, l. 136) ; le nom de
+  la couche en tête de chaque message n'est plus la règle.
 - Le zip réimporté est copié sous un nom provisoire dans `cerf-imports/` et ne remplace
   l'ancienne copie qu'après un import réussi (Pascal, 4 novembre 2026) : un zip abîmé ne doit
   pas rendre illisibles, à la réouverture, les couches gardées sur la carte.
+
+## Note du 26 novembre 2026 (dev, aller-retour 1)
+
+- La spec (`docs/spec.md` § 3.3 et § 11 n° 2) a été modifiée dans cette mission **à la demande de l'orchestrateur** (harnais
+  élargi pour la reprise, la fiche d'origine interdisant d'y toucher).
+- Décision de Pascal du 26 novembre : au réimport, une couche sautée parce qu'une annexe résiste doit être rechargée sur la
+  carte depuis son ancienne copie. Elle contredisait D3-04 du testeur (`!ajoutees2.includes('a')`) : réglé le 26 novembre, D3-04 réécrit par le testeur (5d32f32), rechargement réalisé par le dev (c9de86c).

@@ -101,7 +101,7 @@ Voir [`docs/spec.md`](docs/spec.md) § 3.5.
 
 **Tu prépares un zip ?** Lis d'abord [`docs/preparer-son-zip.md`](docs/preparer-son-zip.md) : formats, plafond, noms de couches et styles, messages de refus, en une page.
 
-Le plugin 0.8.0 (sur `main`) fait ce qui suit. Pas plus.
+Le plugin 0.9.0 (sur `main`) fait ce qui suit. Pas plus.
 
 ### Ce que le plugin lit aujourd'hui
 
@@ -138,7 +138,8 @@ Les limites réelles :
 
 - **Réouverture** : ferme et rouvre le projet, ou redémarre le téléphone, les couches reviennent (sans réseau).
 - **Retrait** : dans le panneau Vision, touche « Retirer » en face de la couche. La couche quitte la carte et le registre. Le plugin essaie d'effacer ses fichiers (`.gpkg`, `.qml`), vérifie, puis dit ce qui reste : « Fichiers restés sur l'appareil : … ». La copie du zip est effacée quand plus aucune couche ne s'en sert ; sinon, ou si l'effacement échoue : « Copie conservée sur l'appareil : … ».
-- **Réimporter un zip sous le même nom** : il remplace l'ancien. Les couches de l'ancien zip qui ne sont plus dans le nouveau sont retirées.
+- **Réimporter un zip sous le même nom** : il remplace l'ancien. Les couches de l'ancien zip qui ne sont plus dans le nouveau sont retirées, et leurs fichiers effacés (`.gpkg`, `.qml`, et les annexes `-wal`, `-shm`, `.aux.xml`). Pour une couche gardée, ses annexes sont effacées avant la réécriture ; si l'une résiste, la couche est gardée telle quelle (ancienne copie et registre inchangés) et le message nomme le fichier resté.
+- **Dossier d'un zip** : `vision-imports/<nom du zip>/` est **laissé, vide**, quand sa dernière couche est retirée (QField n'offre pas d'effacement de dossier sûr : spec § 3.3 et § 11 n° 2). Il est réutilisé à l'import suivant.
 
 ### Les styles du manuel
 
