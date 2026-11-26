@@ -538,3 +538,4 @@
 2026-11-26 · orchestrateur · 014 · déclencheur temporaire mission/014-registre ajouté à release-plugin.yml (préversion plugin-essai 0.9.0 pour l'essai de Pascal), à retirer avant main.
 2026-11-26 · Pascal · « fusionne la PR #65 » : mission 014 (registre complet, 013 fusionnée, plugin 0.9.0) fusionnée par l'orchestrateur après retrait du déclencheur temporaire (a0b72cc) ; essai Samsung de la préversion 0.9.0 non rapporté avant la fusion ; la fusion publie plugin-v0.9.0. Cartes 013 et 014 en Terminé.
 2026-11-26 · orchestrateur · 014 · après la fusion de la PR #65 (37390bf) : run 78 réussi, release stable plugin-v0.9.0 publiée (latest, plugin-vision.zip sha256 83a2f231…). Cycle 7 bouclé : 017, 055, 014 (et 013) fusionnées ; plugin 0.8.0 puis 0.9.0 publiés.
+2026-11-26 · Pascal · « oui, ouvre la PR de pilotage et fusionne » : journal et kanban du cycle 7 fusionnés sur main par l'orchestrateur.
