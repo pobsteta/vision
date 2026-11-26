@@ -49,6 +49,8 @@
 | [017 Convention du zip](missions/017-convention-zip.md) | `archiviste` | sonnet | appuyer | oui/oui/oui | 5 |
 | [018 Notice de JFC](missions/018-notice-jfc.md) | `archiviste` | sonnet | tenir | oui/non/non | en attente |
 
+*Ajout du 26 novembre 2026 (bilan n° 2) : ce tableau s'arrête à la mission 019. **Missions 019 à 055 : agent, cycle et état dans [`kanban.md`](kanban.md) et les fiches `missions/`** (pas de recopie ici). Sorts des deux lignes ci-dessus : **015 abandonnée** (Pascal, 26 novembre 2026) ; **013 fusionnée dans la 014** (PR #65).*
+
 Cycle = cycle de `/boucle` prévu, sous le plafond de 3 PR ouvertes. Agents mobilisés : `acquereur`, `testeur`, `dev`, `afficheur`, `archiviste`, `relecteur` (chaque PR). Ni `analyste` (pas encore d'échecs à compter) ni `contradicteur` (déjà passé sur brief, spec et ADR ; rappelé pour toute nouvelle ADR).
 
 ## Bilan du 5 novembre 2026 (validé par Pascal)
@@ -65,3 +67,24 @@ Cycle = cycle de `/boucle` prévu, sous le plafond de 3 PR ouvertes. Agents mobi
   essayée sur l'appareil avant fusion.
 - Règle ajoutée : les droits et domaines réseau nécessaires sont demandés à Pascal **avant** le
   lancement d'une mission.
+
+## Bilan du 26 novembre 2026 (validé par Pascal)
+
+- Missions 051 à 055 et reprises de 013, 014, 017 : agent et cycle dans `pilotage/kanban.md` et les fiches.
+- `afficheur` : **retiré de l'équipe** (mission 015 abandonnée par Pascal le 26 novembre 2026 ; jamais servi).
+- `acquereur` : sans emploi depuis le bilan n° 1, gardé en réserve.
+- `contradicteur` : gardé pour toute nouvelle ADR (non appelé pour l'amendement de l'ADR 0010 : à rappeler).
+- `analyste`, `archiviste`, `testeur`, `dev`, `relecteur` : ont servi.
+- Délégation à l'orchestrateur gardée telle quelle (fusion seulement sur demande nominative de Pascal), sans élargissement ;
+  trois défaites de l'orchestrateur au journal (branche périmée, consigne « inutile de réinstaller », conflit qui a effacé
+  le code de la 055).
+- Règles ajoutées ou rappelées :
+  - **preuve avant code** renforcée : une pièce liste chaque appel QField/QGIS/GDAL, sa source et son état (lu, essayé
+    sur l'appareil, inconnu) ; le code ne démarre qu'une fois les inconnus essayés par une sonde ou assumés par écrit ;
+  - **préversions reconnaissables** : chaque préversion plugin-essai porte un suffixe unique affiché dans le panneau, lu
+    avant tout essai ;
+  - **le testeur reçoit les décisions de Pascal en vigueur** et les cas limites d'erreur avant d'écrire ses tests ;
+  - rappel de la règle du bilan n° 1, violée 4 fois (052, 055, 014, 054) : toute préversion qui touche QField est essayée
+    sur l'appareil **avant** fusion.
+- **Gel** : aucune nouvelle mission de fonction avant le retour du terrain (essai de la 0.10.0 sur le Samsung, essais de
+  recette, envoi à JFC).

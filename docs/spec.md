@@ -562,6 +562,7 @@ marqués « (auto, logique seule) » ont aussi un test automatique sur la logiqu
 4. Après **redémarrage de l'appareil**, les 4 couches reviennent. (auto, logique seule)
 5. Fond IGN (Cadastre, Plan IGN v2, BD ORTHO ; **pas OpenStreetMap ni OpenTopoMap**, en ligne seulement) visible hors ligne sur une zone parcourue **la veille, puis à J+2** (le cache
    de QGIS expire par défaut au bout de 24 h). Échec à J+2 → fond embarqué de repli.
+   *Ajout du 26 novembre 2026 (bilan n° 2, archiviste) : la parenthèse « 24 h » est une **hypothèse** (ADR 0002), non une mesure. **Mesuré** : le serveur IGN annonce `max-age=1814400`, soit 21 jours, pour Plan IGN v2 et BD ORTHO (`docs/referentiels/fonds-ign.md`, tableau des en-têtes). **Non mesuré** : la durée réellement appliquée par le cache de QField/QGIS sur l'appareil ; seul l'essai à J+2 la dira. En attendant, ne pas tenir 24 h ni 21 jours pour acquis.*
 6. Zip `piege`, chaque piège donne un message clair et aucune couche n'est chargée de
    travers : GeoJSON en Lambert 93 **sans membre `crs`** ; Shapefile sans `.prj` ; GeoTIFF
    sans géoréférencement ; couche au nom non reconnu (chargée avec le style par défaut) ;
@@ -694,8 +695,11 @@ autres résultats (Q2 à Q4) tiennent.
 7. **Essais de recette non rapportés** (d'ici le 12 novembre, décision du bilan n° 1) : critères 1, 3, 5 (veille et J+2),
    7 et 10 du § 6, détail des essais de lecture des tables et du style de GeoPackage (§ 4, § 5). Ce ne sont pas des
    décisions mais des résultats attendus de Pascal.
+   *Ajout du 26 novembre 2026 (bilan n° 2) : échéance du 12 novembre dépassée ; **nouvelle échéance 3 décembre 2026, Pascal** (bilan n° 2).*
 8. **Réponses attendues de JFC** (voir `docs/brief.md`, « À fournir avant la spec ») : Serre_EA2026, champs `CODE_UG`,
    `CODE_PARC`, `CODE_FRT`, licence SCAN 25, licence du fond IGN embarqué.
+   *Ajout du 26 novembre 2026 (bilan n° 2) : propriétaire **Pascal** (relance auprès de JFC) ; échéance **3 décembre 2026**.*
+   *Limites acceptées de la mission 054 (retrait du cache ONF), datées du 26 novembre 2026 (bilan n° 2) : (a) **échec tardif en mode ancien** (ancien `vision.qgz`) : si l'écriture du registre échoue, ou si le retrait de la carte lève une exception, après le retrait des couches du cache, les fichiers et le registre sont remis en place mais les couches ne reviennent sur la carte qu'à la réouverture du projet, alors que le message dit « rien n'est changé » ; non testé (relecture de la 054) ; (b) **bouton caché pour un cache incomplet** : « Vider le cache ONF » n'apparaît que si les trois couches du cache sont inscrites au registre ; un cache partiel (une ou deux couches) ne peut pas être vidé depuis le panneau. Acceptées, non corrigées.*
 9. **Libération des couches de travail (mission 053, 25 novembre 2026)** : QML ne peut ni `deleteLater()` ni `destroy()` une
    couche ouverte par le plugin (Qt 6.10.3 cache `deleteLater` à QML, `destroy()` refuse un objet en `CppOwnership` :
    `docs/referentiels/cache-zone-qfield.md` § 10). Les couches de travail du cache (GML ouverts) et celles des imports de zip ne sont
