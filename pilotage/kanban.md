@@ -39,10 +39,6 @@ _Modèle de carte :_
   - Homme : `dev` (sonnet)
   - Mission : Registre complet — cycle prévu 6
   - Moyens : `docs/spec.md` § 3.3, ADR 0003
-- [017-convention-zip](missions/017-convention-zip.md) · depuis le cycle 0 ; **tranchée par Pascal le 26 novembre 2026** : page unique « préparer son zip » pour JFC, avec la notice de la 018 ; fiche reprise le 26 novembre, **à valider par Pascal**
-  - Homme : `archiviste` (sonnet)
-  - Mission : Convention du zip — cycle prévu 5
-  - Moyens : `docs/spec.md` § 3.1, § 4, § 5
 
 ## Planifié
 
@@ -54,6 +50,10 @@ _Modèle de carte :_
 
 ## Terminé
 
+- [017-convention-zip](missions/017-convention-zip.md) · depuis le cycle 7 · fusionnée (PR #63, 26 novembre 2026) : `docs/preparer-son-zip.md`
+  - Homme : `archiviste` (sonnet)
+  - Mission : Convention du zip — cycle prévu 5
+  - Moyens : `docs/spec.md` § 3.1, § 4, § 5
 - [015-panneau-plugin](missions/015-panneau-plugin.md) · depuis le cycle 0 · **abandonnée par Pascal le 26 novembre 2026** : panneau actuel jugé suffisant, cases de choix des couches retirées du besoin
   - Homme : `afficheur` (sonnet)
   - Mission : Panneau du plugin pour gants et soleil — cycle prévu 6
