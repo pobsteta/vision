@@ -10,7 +10,7 @@
 > ont été reprises une à une contre le journal et les fiches ; la source qui justifie la colonne est écrite sur
 > chaque carte concernée. Les questions ouvertes sont rangées dans `docs/spec.md` § 11.
 
-**Dernier cycle :** 6 _(augmenté de 1 à la fin de chaque `/boucle`, même quand elle n'a
+**Dernier cycle :** 7 _(augmenté de 1 à la fin de chaque `/boucle`, même quand elle n'a
 rien lancé. Une carte est immobile quand dernier cycle − N ≥ 2.)_
 
 _Modèle de carte :_
@@ -31,29 +31,29 @@ _Modèle de carte :_
 
 ## Validé
 
-- [013-tests-registre](missions/013-tests-registre.md) · depuis le cycle 0 ; **fusionnée avec la 014 par Pascal le 26 novembre 2026** (le testeur écrit d'abord les tests d'acceptation, puis le dev réalise) ; fiche reprise le 26 novembre (dans la 014)
-  - Homme : `testeur` (sonnet)
-  - Mission : Tests du registre complet — cycle prévu 5
-  - Moyens : `docs/spec.md` § 3.3, § 9 
-- [014-registre](missions/014-registre.md) · depuis le cycle 0 ; **tranchée par Pascal le 26 novembre 2026** : dossier vide effacé, dossier entier remplacé au réimport (preuve avant code : un plugin sait-il effacer un dossier ? cf. 053) ; fiche reprise le 26 novembre, **à valider par Pascal**
-  - Homme : `dev` (sonnet)
-  - Mission : Registre complet — cycle prévu 6
-  - Moyens : `docs/spec.md` § 3.3, ADR 0003
-- [017-convention-zip](missions/017-convention-zip.md) · depuis le cycle 0 ; **tranchée par Pascal le 26 novembre 2026** : page unique « préparer son zip » pour JFC, avec la notice de la 018 ; fiche reprise le 26 novembre, **à valider par Pascal**
-  - Homme : `archiviste` (sonnet)
-  - Mission : Convention du zip — cycle prévu 5
-  - Moyens : `docs/spec.md` § 3.1, § 4, § 5
 
 ## Planifié
 
-- [055-rappel-hors-ligne](missions/055-rappel-hors-ligne.md) · depuis le cycle 6 · **proposée le 26 novembre 2026, à valider par Pascal** (porte n° 2)
-  - Homme : `dev` (proposition du texte, puis réalisation), puis `relecteur`
-  - Mission : rappeler à l'agent, avant le terrain, de préparer le hors-ligne (fonds IGN, cache ONF de la zone du jour)
-  - Moyens : spec § 3.4, § 3.6, critère 5 de la recette ; texte validé par Pascal avant tout code
 
 
 ## Terminé
 
+- [013-tests-registre](missions/013-tests-registre.md) · depuis le cycle 7 · fusionnée dans la 014 (PR #65)
+  - Homme : `testeur` (sonnet)
+  - Mission : Tests du registre complet — cycle prévu 5
+  - Moyens : `docs/spec.md` § 3.3, § 9 
+- [014-registre](missions/014-registre.md) · depuis le cycle 7 · fusionnée (PR #65, 26 novembre 2026), plugin 0.9.0 ; 013 fusionnée dedans
+  - Homme : `dev` (sonnet)
+  - Mission : Registre complet — cycle prévu 6
+  - Moyens : `docs/spec.md` § 3.3, ADR 0003
+- [055-rappel-hors-ligne](missions/055-rappel-hors-ligne.md) · depuis le cycle 7 · fusionnée (PR #64, 26 novembre 2026), plugin 0.8.0
+  - Homme : `dev` (proposition du texte, puis réalisation), puis `relecteur`
+  - Mission : rappeler à l'agent, avant le terrain, de préparer le hors-ligne (fonds IGN, cache ONF de la zone du jour)
+  - Moyens : spec § 3.4, § 3.6, critère 5 de la recette ; texte validé par Pascal avant tout code
+- [017-convention-zip](missions/017-convention-zip.md) · depuis le cycle 7 · fusionnée (PR #63, 26 novembre 2026) : `docs/preparer-son-zip.md`
+  - Homme : `archiviste` (sonnet)
+  - Mission : Convention du zip — cycle prévu 5
+  - Moyens : `docs/spec.md` § 3.1, § 4, § 5
 - [015-panneau-plugin](missions/015-panneau-plugin.md) · depuis le cycle 0 · **abandonnée par Pascal le 26 novembre 2026** : panneau actuel jugé suffisant, cases de choix des couches retirées du besoin
   - Homme : `afficheur` (sonnet)
   - Mission : Panneau du plugin pour gants et soleil — cycle prévu 6
@@ -258,3 +258,4 @@ l'inscrit avec ce qu'elle nous apprend._
 - cycle 4 · livraison : le projet modèle vision.qgz (fonds IGN en flux dans le groupe « Fonds de carte », Lambert 93, vision_id), importable par URL dans QField depuis la release prototype-1 · pour JFC · un projet tout prêt, vu ouvert sur le Samsung de Pascal, au lieu de deux URL à coller à la main
 - cycle 5 · livraison : les zips de recette piege et lourd, rejouables par outils/zips-recette.mjs, à ouvrir dans QGIS · pour Pascal · de quoi juger le futur plugin sur les pièges et la charge, là où le cycle 4 livrait le projet
 - bilan du 2026-11-05 · livraison : Vision 0.5.0 (plugin-vision.zip et projet-vision.zip par flashcode : fonds IGN, cadastre, OSM, OpenTopoMap, fond embarqué QFieldSync, import GeoJSON, Shapefile, GeoPackage, GeoTIFF aux couleurs du manuel, style enregistré d'un GeoPackage), à confier à JFC pour un premier essai dans son UT · pour les agents de terrain de l'UT de JFC · première version complète remise au terrain, là où le cycle 5 ne livrait que des zips de recette et des prototypes essayés sur le seul Samsung de Pascal
+- cycle 7 · livraison : la page « préparer son zip » (`docs/preparer-son-zip.md`, sur main, PR #63), à envoyer à JFC avec la question des champs CODE_* / CCOD_* · pour JFC · il prépare seul des zips que le plugin accepte du premier coup, là où le bilan n° 1 livrait le plugin sans mode d'emploi du zip
